@@ -2,6 +2,7 @@
 -- Implementation lives in focused modules under lua/proud/ui/; this file
 -- re-exports the stable API so callers never depend on the module layout.
 local config = require("proud.ui.config")
+local cursor = require("proud.ui.cursor")
 local float = require("proud.ui.float")
 local geometry = require("proud.ui.geometry")
 local header = require("proud.ui.header")
@@ -21,21 +22,10 @@ local M = {
   themes = themes,
   geometry = geometry,
   float = float,
+  cursor = cursor,
   text = text,
   view = view,
 }
-
-local buffer_lifecycle_group = vim.api.nvim_create_augroup("ProudBufferLifecycle", { clear = true })
-vim.api.nvim_create_autocmd("QuitPre", {
-  group = buffer_lifecycle_group,
-  callback = function()
-    for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
-      if vim.api.nvim_buf_is_valid(buffer) and vim.b[buffer].proud_buffer then
-        vim.bo[buffer].modified = false
-      end
-    end
-  end,
-})
 
 -- Themes
 function M.add_theme(name, definition, options)

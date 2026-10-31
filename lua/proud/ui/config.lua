@@ -13,15 +13,28 @@ local function nonnegative_integer(value, fallback)
   return math.floor(value)
 end
 
-function M.configure(options)
+-- Returns a new layout: `base` with any valid values from `options`
+-- (either { windows = {...} } or the windows table itself) applied.
+-- Neither argument is modified.
+function M.resolve(options, base)
   options = options or {}
+  base = base or layout
   local windows = options.windows or options
   local margin = windows.margin or {}
-  layout.margin.top = nonnegative_integer(margin.top, layout.margin.top)
-  layout.margin.bottom = nonnegative_integer(margin.bottom, layout.margin.bottom)
-  layout.margin.left = nonnegative_integer(margin.left, layout.margin.left)
-  layout.margin.right = nonnegative_integer(margin.right, layout.margin.right)
-  layout.gap = nonnegative_integer(windows.gap, layout.gap)
+  return {
+    margin = {
+      top = nonnegative_integer(margin.top, base.margin.top),
+      bottom = nonnegative_integer(margin.bottom, base.margin.bottom),
+      left = nonnegative_integer(margin.left, base.margin.left),
+      right = nonnegative_integer(margin.right, base.margin.right),
+    },
+    gap = nonnegative_integer(windows.gap, base.gap),
+  }
+end
+
+-- Sets the global default layout (called from setup()).
+function M.configure(options)
+  layout = M.resolve(options)
   return M.layout_config()
 end
 

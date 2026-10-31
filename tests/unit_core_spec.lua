@@ -112,7 +112,7 @@ return function(test)
   test.truthy(active_button and active_button[4] == "ProudAccent", "active button uses the default solid purple fill")
   test.truthy(inactive_button and inactive_button[4] == "ProudMuted", "inactive button shares the normal background with muted text")
   test.truthy(active_button and active_button[3] - active_button[2] >= 7, "active fill includes the complete button and padding")
-  local theme = require("proud.theme").groups()
+  local theme = require("proud.palette").groups()
   test.eq("#7F56D9", theme.ProudAccent.bg, "only the selected button receives the purple background")
   test.eq(nil, theme.ProudMuted.bg, "unselected buttons do not receive a separate background")
   local debounce_calls = {}

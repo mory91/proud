@@ -801,8 +801,8 @@ function M.attach(buffer, state, options)
     end
     local window = preview_window()
     if window and vim.api.nvim_win_is_valid(window) then
-      vim.api.nvim_set_current_win(window)
-      vim.o.guicursor = "a:block-ProudAccent"
+      ui.cursor.set_window(window, "accent")
+      ui.cursor.focus(window)
       local line_count = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(window))
       local row = math.max(1, math.min(line_count, 3))
       pcall(vim.api.nvim_win_set_cursor, window, { row, 0 })

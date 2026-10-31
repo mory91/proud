@@ -3,6 +3,12 @@ local M = {}
 local definitions = {}
 local current_name
 local applied_groups = {}
+local manage_termguicolors = true
+
+-- Whether apply() turns on 'termguicolors' (Proud's palettes are 24-bit).
+function M.set_manage_termguicolors(value)
+  manage_termguicolors = value ~= false
+end
 
 local function copy(value)
   return vim.deepcopy(value or {})
@@ -95,7 +101,9 @@ function M.apply(name)
   checked_name(target)
   local groups = resolve_groups(target)
   local next_applied = {}
-  vim.o.termguicolors = true
+  if manage_termguicolors then
+    vim.o.termguicolors = true
+  end
   for group, style in pairs(groups) do
     vim.api.nvim_set_hl(0, group, copy(style))
     next_applied[group] = true

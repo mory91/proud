@@ -3,6 +3,7 @@
 -- bar above them. Everything feature-specific (names, titles, prompts,
 -- highlight choices) comes from the caller's pane specs.
 local ui_config = require("proud.ui.config")
+local ui_cursor = require("proud.ui.cursor")
 local ui_geometry = require("proud.ui.geometry")
 local ui_header = require("proud.ui.header")
 local ui_lifecycle = require("proud.ui.lifecycle")
@@ -11,12 +12,6 @@ local ui_selector = require("proud.ui.selector")
 local ui_window = require("proud.ui.window")
 
 local M = {}
-
--- Cursor shapes applied when a pane takes focus.
-M.cursor = {
-  hidden = "a:block-ProudCursorHidden",
-  accent = "a:block-ProudAccent",
-}
 
 local function pane_config(rect, focusable, creating)
   return {
@@ -63,7 +58,8 @@ function M.open_pair(spec)
     statusline = spec.statusline or spec.title or "proud",
   })
 
-  local configured_layout = spec.windows and ui_config.configure(spec.windows) or ui_config.layout_config()
+  -- Per-surface overrides apply to this surface only; defaults stay intact.
+  local configured_layout = ui_config.resolve(spec.windows or {}, ui_config.layout_config())
   local function geometry()
     return ui_geometry.surface(vim.o.columns, vim.o.lines, configured_layout)
   end
@@ -94,6 +90,7 @@ function M.open_pair(spec)
       statusline = pane_spec.statusline or spec.statusline or pane_spec.title,
       cursorline = false,
       hide_cursor = pane_spec.cursor == "hidden",
+      cursor_shape = pane_spec.cursor,
     }, pane_spec.decorate or {}))
     surface.panes[pane_spec.name] = {
       name = pane_spec.name,
@@ -154,11 +151,7 @@ function M.open_pair(spec)
     if not pane or not vim.api.nvim_win_is_valid(pane.window) then
       return false
     end
-    vim.api.nvim_set_current_win(pane.window)
-    local shape = M.cursor[pane.spec.cursor]
-    if shape then
-      vim.o.guicursor = shape
-    end
+    ui_cursor.focus(pane.window)
     if pane.spec.focus_row then
       local line_count = vim.api.nvim_buf_line_count(pane.buffer)
       local row = math.max(1, math.min(line_count, pane.spec.focus_row))

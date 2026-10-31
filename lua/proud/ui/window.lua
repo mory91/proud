@@ -1,6 +1,6 @@
-local M = {}
+local ui_cursor = require("proud.ui.cursor")
 
-M.default_guicursor = vim.o.guicursor
+local M = {}
 
 -- Fallback tab/status title when a caller passes none: the buffer name
 -- without its proud:// scheme. Features pass explicit titles.
@@ -74,7 +74,7 @@ end
 
 function M.decorate(window, buffer, name, options)
   options = options or {}
-  vim.o.guicursor = options.hide_cursor and "a:block-ProudCursorHidden" or M.default_guicursor
+  ui_cursor.set_window(window, options.hide_cursor and "hidden" or options.cursor_shape)
   local normal_group = options.normal_group or "ProudBackground"
   local normal_nc_group = options.normal_nc_group or normal_group
   local float_group = options.float_group or "ProudBackground"
@@ -124,6 +124,26 @@ M.base_buffer_options = {
   modifiable = false,
 }
 
+-- Installed on first buffer creation (not at require time): clears the
+-- modified flag on Proud buffers so :quit never stops on them.
+local quit_guard_installed = false
+local function install_quit_guard()
+  if quit_guard_installed then
+    return
+  end
+  quit_guard_installed = true
+  vim.api.nvim_create_autocmd("QuitPre", {
+    group = vim.api.nvim_create_augroup("ProudBufferLifecycle", { clear = true }),
+    callback = function()
+      for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_valid(buffer) and vim.b[buffer].proud_buffer then
+          vim.bo[buffer].modified = false
+        end
+      end
+    end,
+  })
+end
+
 local function find_buffer(name)
   for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_valid(buffer) and vim.api.nvim_buf_get_name(buffer) == name then
@@ -137,6 +157,7 @@ end
 -- options.bo overrides or extends M.base_buffer_options.
 function M.buffer(name, options)
   options = options or {}
+  install_quit_guard()
   local buffer = name and options.reuse ~= false and find_buffer(name) or nil
   if not buffer then
     buffer = vim.api.nvim_create_buf(false, true)
