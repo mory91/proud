@@ -424,12 +424,21 @@ function M.render_list(state, options)
   end
 
   add("")
-  add("Select a pull request to open its review overview.")
-  add("Visible " .. #state.filtered .. "  ·  Source " .. state.source)
-  ui.view.span(lines, highlights, #lines - 2, "Select a pull request", "ProudAccentText", "flat")
-  ui.view.span(lines, highlights, #lines - 2, "review overview", "ProudSuccessText", "flat")
-  ui.view.span(lines, highlights, #lines - 1, "Visible", "ProudMuted", "flat")
-  ui.view.span(lines, highlights, #lines - 1, "Source", "ProudMuted", "flat")
+  -- Footer columns are computed from the text, like the rows above.
+  local function mark(row, start_col, text, group)
+    local line = lines[row + 1]
+    if start_col < #line then
+      push_flat(highlights, row, start_col, math.min(start_col + #text, #line), group)
+    end
+  end
+  local open_prefix, open_target = "Select a pull request", "review overview"
+  add(open_prefix .. " to open its " .. open_target .. ".")
+  mark(#lines - 1, 0, open_prefix, "ProudAccentText")
+  mark(#lines - 1, #open_prefix + #" to open its ", open_target, "ProudSuccessText")
+  local visible = "Visible " .. #state.filtered .. "  ·  "
+  add(visible .. "Source " .. state.source)
+  mark(#lines - 1, 0, "Visible", "ProudMuted")
+  mark(#lines - 1, #visible, "Source", "ProudMuted")
   return { lines = lines, highlights = highlights, highlight_format = "flat" }
 end
 
