@@ -26,8 +26,10 @@ function M.open(parent_window, options)
     end
     return width
   end
-  local buffer = ui_window.buffer(options.buffer_name or "proud://pane/header")
   local editable = options.editable or options.prompt ~= nil
+  local buffer = ui_window.buffer(options.buffer_name or "proud://pane/header", {
+    bo = { buftype = editable and "prompt" or "nofile", modifiable = editable },
+  })
   local function normalize_segments(value)
     if type(value) == "table" then
       return value
@@ -38,8 +40,6 @@ function M.open(parent_window, options)
     end
     return { { text = text, group = options.trailing_group or "ProudMuted" } }
   end
-  vim.bo[buffer].buftype = editable and "prompt" or "nofile"
-  vim.bo[buffer].modifiable = editable
   local prompt = editable and tostring(options.prompt or "") or ""
   if editable then
     vim.fn.prompt_setprompt(buffer, prompt)
@@ -52,24 +52,16 @@ function M.open(parent_window, options)
     ),
   })
   local window = frame.window
-  vim.wo[window].winhighlight = table.concat({
-    "Normal:" .. (options.normal_group or "ProudBackground"),
-    "NormalNC:" .. (options.normal_group or "ProudBackground"),
-    "NormalFloat:" .. (options.normal_group or "ProudBackground"),
-    "FloatBorder:" .. (options.border_group or "ProudBorder"),
-    "Cursor:" .. (options.cursor_group or "ProudAccent"),
-    "lCursor:" .. (options.cursor_group or "ProudAccent"),
-    "CursorIM:" .. (options.cursor_group or "ProudAccent"),
-    "Prompt:" .. (options.prompt_group or "ProudAccentText"),
-    "EndOfBuffer:ProudBorder",
-  }, ",")
-  vim.wo[window].number = false
-  vim.wo[window].relativenumber = false
-  vim.wo[window].signcolumn = "no"
-  vim.wo[window].cursorline = false
-  vim.wo[window].wrap = false
-  vim.wo[window].linebreak = false
-  vim.wo[window].breakindent = false
+  local normal_group = options.normal_group or "ProudBackground"
+  ui_window.winhighlight(window, ui_window.cursor_groups({
+    Normal = normal_group,
+    NormalNC = normal_group,
+    NormalFloat = normal_group,
+    FloatBorder = options.border_group or "ProudBorder",
+    Prompt = options.prompt_group or "ProudAccentText",
+    EndOfBuffer = "ProudBorder",
+  }, options.cursor_group or "ProudAccent"))
+  ui_window.options(window)
   vim.b[buffer].proud_title = options.title or "proud header"
   local header = {
     buffer = buffer,
@@ -93,32 +85,18 @@ function M.open(parent_window, options)
     return line
   end
 
-  function header.render()
-    if not vim.api.nvim_buf_is_valid(buffer) then
-      return
-    end
-    vim.api.nvim_buf_clear_namespace(buffer, namespace, 0, -1)
-    if not editable then
+  -- Static label row; returns the column where trailing text anchors.
+  local function render_label()
     local text = ui_text.fit(options.text or "", current_width())
-      vim.bo[buffer].modifiable = true
-      vim.api.nvim_buf_set_lines(buffer, 0, -1, false, { text })
-      vim.bo[buffer].modifiable = false
-      header_mark(buffer, 0, #text, options.text_group or "ProudAccentText")
-      local trailing = {}
-      for _, segment in ipairs(header.trailing_segments) do
-        local segment_text = tostring(segment.text or "")
-        if segment_text ~= "" then
-          table.insert(trailing, { segment_text, segment.group or options.trailing_group or "ProudMuted" })
-        end
-      end
-      if #trailing > 0 then
-        vim.api.nvim_buf_set_extmark(buffer, namespace, 0, #text, {
-          virt_text = trailing,
-          virt_text_pos = "right_align",
-        })
-      end
-      return
-    end
+    vim.bo[buffer].modifiable = true
+    vim.api.nvim_buf_set_lines(buffer, 0, -1, false, { text })
+    vim.bo[buffer].modifiable = false
+    header_mark(buffer, 0, #text, options.text_group or "ProudAccentText")
+    return #text
+  end
+
+  -- Editable prompt row; returns the column where trailing text anchors.
+  local function render_prompt()
     local line = vim.api.nvim_buf_get_lines(buffer, 0, 1, false)[1] or prompt
     local offset = 0
     for _, segment in ipairs(options.prompt_segments or {}) do
@@ -140,6 +118,11 @@ function M.open(parent_window, options)
     else
       header_mark(buffer, #prompt, #line, options.value_group or "ProudBright")
     end
+    return #line
+  end
+
+  -- Right-aligned trailing segments (e.g. the filtered/total count).
+  local function render_trailing(col)
     local trailing = {}
     for _, segment in ipairs(header.trailing_segments) do
       local segment_text = tostring(segment.text or "")
@@ -148,11 +131,19 @@ function M.open(parent_window, options)
       end
     end
     if #trailing > 0 then
-      vim.api.nvim_buf_set_extmark(buffer, namespace, 0, #line, {
+      vim.api.nvim_buf_set_extmark(buffer, namespace, 0, col, {
         virt_text = trailing,
         virt_text_pos = "right_align",
       })
     end
+  end
+
+  function header.render()
+    if not vim.api.nvim_buf_is_valid(buffer) then
+      return
+    end
+    vim.api.nvim_buf_clear_namespace(buffer, namespace, 0, -1)
+    render_trailing(editable and render_prompt() or render_label())
   end
 
   function header.set_trailing(value)
@@ -250,7 +241,6 @@ function M.separator(parent_window, options)
   local width = math.max(1, parent.width or 1)
   local buffer = ui_window.buffer(options.buffer_name or "proud://pane/separator")
   local line = string.rep("─", width)
-  vim.bo[buffer].buftype = "nofile"
   vim.bo[buffer].modifiable = true
   vim.api.nvim_buf_set_lines(buffer, 0, -1, false, { line })
   vim.bo[buffer].modifiable = false
@@ -266,17 +256,14 @@ function M.separator(parent_window, options)
     }),
   })
   local window = frame.window
-  vim.wo[window].winhighlight = table.concat({
-    "Normal:" .. (options.normal_group or "ProudBackground"),
-    "NormalNC:" .. (options.normal_group or "ProudBackground"),
-    "NormalFloat:" .. (options.normal_group or "ProudBackground"),
-    "EndOfBuffer:ProudBorder",
-  }, ",")
-  vim.wo[window].number = false
-  vim.wo[window].relativenumber = false
-  vim.wo[window].signcolumn = "no"
-  vim.wo[window].cursorline = false
-  vim.wo[window].wrap = false
+  local normal_group = options.normal_group or "ProudBackground"
+  ui_window.winhighlight(window, {
+    Normal = normal_group,
+    NormalNC = normal_group,
+    NormalFloat = normal_group,
+    EndOfBuffer = "ProudBorder",
+  })
+  ui_window.options(window)
   return { window = window, buffer = buffer, render = function()
     if not vim.api.nvim_win_is_valid(parent_window) or not vim.api.nvim_win_is_valid(window) then
       return

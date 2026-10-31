@@ -68,6 +68,10 @@ M.button_layout = selector.button_layout
 M.open_rounded_pair = surface.open_rounded_pair
 M.open_float = modal.open_float
 M.set_cursor = window.set_cursor
+M.buffer = window.buffer
+M.window_options = window.options
+M.winhighlight = window.winhighlight
+M.cursor_groups = window.cursor_groups
 
 -- Workspaces
 M.open_workspace = workspace.open_workspace

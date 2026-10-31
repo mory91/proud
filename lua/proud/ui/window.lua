@@ -27,6 +27,53 @@ function M.title_for(name)
   return name:gsub("^proud://", "")
 end
 
+-- Window-local options shared by every Proud window: no gutters, no
+-- cursorline, no soft wrapping. Pass overrides for anything that differs.
+M.base_options = {
+  number = false,
+  relativenumber = false,
+  signcolumn = "no",
+  cursorline = false,
+  wrap = false,
+  linebreak = false,
+  breakindent = false,
+}
+
+function M.options(window, overrides)
+  for name, value in pairs(M.base_options) do
+    if not overrides or overrides[name] == nil then
+      vim.wo[window][name] = value
+    end
+  end
+  for name, value in pairs(overrides or {}) do
+    vim.wo[window][name] = value
+  end
+end
+
+-- Builds a 'winhighlight' value from { BuiltinGroup = "ProudGroup" }.
+-- Keys are sorted so the result is deterministic.
+function M.winhighlight_value(mapping)
+  local names = vim.tbl_keys(mapping)
+  table.sort(names)
+  local parts = {}
+  for _, name in ipairs(names) do
+    parts[#parts + 1] = name .. ":" .. mapping[name]
+  end
+  return table.concat(parts, ",")
+end
+
+function M.winhighlight(window, mapping)
+  vim.wo[window].winhighlight = M.winhighlight_value(mapping)
+end
+
+-- Maps the three cursor highlight slots to one group.
+function M.cursor_groups(mapping, group)
+  mapping.Cursor = group
+  mapping.lCursor = group
+  mapping.CursorIM = group
+  return mapping
+end
+
 function M.decorate(window, buffer, name, options)
   options = options or {}
   vim.o.guicursor = options.hide_cursor and "a:block-ProudCursorHidden" or M.default_guicursor
@@ -36,33 +83,26 @@ function M.decorate(window, buffer, name, options)
   local float_border = options.float_border or "ProudAccentText"
   local float_title = options.float_title or "ProudAccentText"
   local winhighlight = {
-    "Normal:" .. normal_group,
-    "NormalNC:" .. normal_nc_group,
-    "EndOfBuffer:ProudBorder",
-    "StatusLine:ProudPanel",
-    "StatusLineNC:ProudPanel",
-    "TabLine:ProudPanel",
-    "TabLineSel:ProudTabActive",
-    "WinSeparator:ProudBorder",
-    "NormalFloat:" .. float_group,
-    "FloatBorder:" .. float_border,
-    "FloatTitle:" .. float_title,
-    "CursorLine:ProudSelection",
+    Normal = normal_group,
+    NormalNC = normal_nc_group,
+    EndOfBuffer = "ProudBorder",
+    StatusLine = "ProudPanel",
+    StatusLineNC = "ProudPanel",
+    TabLine = "ProudPanel",
+    TabLineSel = "ProudTabActive",
+    WinSeparator = "ProudBorder",
+    NormalFloat = float_group,
+    FloatBorder = float_border,
+    FloatTitle = float_title,
+    CursorLine = "ProudSelection",
   }
   if options.hide_cursor then
-    table.insert(winhighlight, "Cursor:ProudCursorHidden")
-    table.insert(winhighlight, "lCursor:ProudCursorHidden")
-    table.insert(winhighlight, "CursorIM:ProudCursorHidden")
+    M.cursor_groups(winhighlight, "ProudCursorHidden")
+  elseif options.cursor_group then
+    M.cursor_groups(winhighlight, options.cursor_group)
   end
-  vim.wo[window].winhighlight = table.concat(winhighlight, ",")
-  vim.wo[window].number = false
-  vim.wo[window].relativenumber = false
-  vim.wo[window].signcolumn = "no"
-  vim.wo[window].cursorline = options.cursorline ~= false
-  vim.wo[window].wrap = false
-  vim.wo[window].linebreak = false
-  vim.wo[window].breakindent = false
-  vim.wo[window].showbreak = ""
+  M.winhighlight(window, winhighlight)
+  M.options(window, { cursorline = options.cursorline ~= false, showbreak = "" })
   vim.b[buffer].proud_title = options.title or M.title_for(name)
   vim.wo[window].statusline = table.concat({
     "%#ProudAccent# NORMAL ",
@@ -80,23 +120,43 @@ function M.decorate(window, buffer, name, options)
   })
 end
 
-function M.buffer(name)
+-- Buffer-local options every Proud buffer starts with.
+M.base_buffer_options = {
+  buftype = "nofile",
+  bufhidden = "hide",
+  swapfile = false,
+  modifiable = false,
+}
+
+local function find_buffer(name)
   for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_valid(buffer) and vim.api.nvim_buf_get_name(buffer) == name then
-      vim.bo[buffer].buftype = "nofile"
-      vim.bo[buffer].bufhidden = "hide"
-      vim.bo[buffer].swapfile = false
-      vim.bo[buffer].modifiable = false
-      vim.b[buffer].proud_buffer = true
       return buffer
     end
   end
-  local buffer = vim.api.nvim_create_buf(false, true)
-  pcall(vim.api.nvim_buf_set_name, buffer, name)
-  vim.bo[buffer].buftype = "nofile"
-  vim.bo[buffer].bufhidden = "hide"
-  vim.bo[buffer].swapfile = false
-  vim.bo[buffer].modifiable = false
+end
+
+-- Returns a scratch buffer named `name` (nil for an unnamed one), reusing
+-- an existing buffer with that name unless options.reuse == false.
+-- options.bo overrides or extends M.base_buffer_options.
+function M.buffer(name, options)
+  options = options or {}
+  local buffer = name and options.reuse ~= false and find_buffer(name) or nil
+  if not buffer then
+    buffer = vim.api.nvim_create_buf(false, true)
+    if name then
+      pcall(vim.api.nvim_buf_set_name, buffer, name)
+    end
+  end
+  local overrides = options.bo or {}
+  for option, value in pairs(M.base_buffer_options) do
+    if overrides[option] == nil then
+      vim.bo[buffer][option] = value
+    end
+  end
+  for option, value in pairs(overrides) do
+    vim.bo[buffer][option] = value
+  end
   vim.b[buffer].proud_buffer = true
   return buffer
 end

@@ -67,29 +67,13 @@ function M.open_rounded_pair(views, options)
     statusline = options.statusline or "Preview",
     cursorline = false,
     hide_cursor = false,
+    cursor_group = "ProudAccent",
     normal_group = "ProudBackground",
     normal_nc_group = "ProudBackground",
     float_group = "ProudBackground",
     float_border = "ProudPreviewBorder",
     float_title = "ProudPreviewTitle",
   })
-  vim.wo[preview_window].winhighlight = table.concat({
-    "Normal:ProudBackground",
-    "NormalNC:ProudBackground",
-    "EndOfBuffer:ProudBorder",
-    "StatusLine:ProudPanel",
-    "StatusLineNC:ProudPanel",
-    "TabLine:ProudPanel",
-    "TabLineSel:ProudTabActive",
-    "WinSeparator:ProudBorder",
-    "NormalFloat:ProudBackground",
-    "FloatBorder:ProudPreviewBorder",
-    "FloatTitle:ProudPreviewTitle",
-    "CursorLine:ProudSelection",
-    "Cursor:ProudAccent",
-    "lCursor:ProudAccent",
-    "CursorIM:ProudAccent",
-  }, ",")
   ui_render.render(list_buffer, views.list or { lines = {} }, { top_pad = 2 })
   ui_render.render(preview_buffer, views.preview or { lines = {} }, { top_pad = 2 })
   local headers = options.headers or {}

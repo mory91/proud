@@ -202,18 +202,15 @@ end
 
 local function card_window_highlight(card)
   local group = card.selected_group or "ProudCard"
-  return table.concat({
-    "Normal:" .. group,
-    "NormalNC:" .. group,
-    "NormalFloat:" .. group,
-    "FloatBorder:ProudCardBorder",
-    "EndOfBuffer:" .. group,
-    "Cursor:ProudCursorHidden",
-    "lCursor:ProudCursorHidden",
-    "CursorIM:ProudCursorHidden",
-    "StatusLine:ProudPanel",
-    "StatusLineNC:ProudPanel",
-  }, ",")
+  return ui.cursor_groups({
+    Normal = group,
+    NormalNC = group,
+    NormalFloat = group,
+    FloatBorder = "ProudCardBorder",
+    EndOfBuffer = group,
+    StatusLine = "ProudPanel",
+    StatusLineNC = "ProudPanel",
+  }, "ProudCursorHidden")
 end
 
 local function card_border(top_visible, bottom_visible)
@@ -297,11 +294,10 @@ function M.sync(state, specs)
       end
     else
       if not card then
-        local buffer = vim.api.nvim_create_buf(false, true)
-        vim.bo[buffer].buftype = "nofile"
-        vim.bo[buffer].bufhidden = "wipe"
-        vim.bo[buffer].swapfile = false
-        vim.api.nvim_buf_set_name(buffer, "proud://conversation-card/" .. spec.id)
+        local buffer = ui.buffer("proud://conversation-card/" .. spec.id, {
+          reuse = false,
+          bo = { bufhidden = "wipe" },
+        })
         card = { buffer = buffer, signature = "" }
         state.cards[spec.id] = card
       end
@@ -340,12 +336,8 @@ function M.sync(state, specs)
       else
         card.float.reposition()
       end
-      vim.wo[card.window].winhighlight = card_window_highlight(card)
-      vim.wo[card.window].wrap = false
-      vim.wo[card.window].cursorline = false
-      vim.wo[card.window].number = false
-      vim.wo[card.window].relativenumber = false
-      vim.wo[card.window].signcolumn = "no"
+      ui.winhighlight(card.window, card_window_highlight(card))
+      ui.window_options(card.window)
       visible = visible + 1
     end
   end

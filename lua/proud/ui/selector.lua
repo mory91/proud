@@ -124,8 +124,6 @@ function M.open_bar(options)
     local view = M.button_layout(options.items, selected, width, options)
     ui_render.render(buffer, { lines = { view.text }, highlights = view.highlights })
   end
-  vim.bo[buffer].buftype = "nofile"
-  vim.bo[buffer].modifiable = false
   -- options.placement() supplies live { row, col, width }; otherwise the
   -- bar stays at the static options.row / options.col / options.width.
   local function placement()
@@ -146,18 +144,13 @@ function M.open_bar(options)
   local frame = ui_float.create(buffer, { placement = placement })
   local window = frame.window
   width = vim.api.nvim_win_get_width(window)
-  vim.wo[window].winhighlight = table.concat({
-    "Normal:ProudBackground",
-    "NormalNC:ProudBackground",
-    "NormalFloat:ProudBackground",
-    "EndOfBuffer:ProudBackground",
-  }, ",")
-  vim.wo[window].number = false
-  vim.wo[window].relativenumber = false
-  vim.wo[window].signcolumn = "no"
-  vim.wo[window].cursorline = false
-  vim.wo[window].wrap = false
-  vim.wo[window].linebreak = false
+  ui_window.winhighlight(window, {
+    Normal = "ProudBackground",
+    NormalNC = "ProudBackground",
+    NormalFloat = "ProudBackground",
+    EndOfBuffer = "ProudBackground",
+  })
+  ui_window.options(window)
   render()
   return {
     buffer = buffer,

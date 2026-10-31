@@ -255,7 +255,11 @@ function M.mask_prompt(buffer, window)
   if window and vim.api.nvim_win_is_valid(window) then
     vim.wo[window].conceallevel = 2
     vim.wo[window].concealcursor = "nvic"
-    vim.wo[window].winhighlight = "NormalFloat:ProudBackground,FloatBorder:ProudAccent,Conceal:ProudAccentText"
+    ui.winhighlight(window, {
+      NormalFloat = "ProudBackground",
+      FloatBorder = "ProudAccent",
+      Conceal = "ProudAccentText",
+    })
   end
   if not vim.b[buffer].proud_prompt_masked then
     vim.api.nvim_buf_call(buffer, function()
@@ -340,13 +344,10 @@ function M.open(state, options)
   state.window = window
   state.header = header
   local modal_config = vim.api.nvim_win_get_config(window)
-  local prompt_buffer = vim.api.nvim_create_buf(false, true)
-  vim.bo[prompt_buffer].buftype = "nofile"
-  vim.bo[prompt_buffer].bufhidden = "wipe"
-  vim.bo[prompt_buffer].swapfile = false
-  vim.bo[prompt_buffer].undofile = false
-  vim.bo[prompt_buffer].undolevels = -1
-  vim.bo[prompt_buffer].modifiable = true
+  -- Unnamed and never reused; no undo history so the token is not retained.
+  local prompt_buffer = ui.buffer(nil, {
+    bo = { bufhidden = "wipe", modifiable = true, undofile = false, undolevels = -1 },
+  })
   vim.api.nvim_buf_set_lines(prompt_buffer, 0, -1, false, { "" })
   local prompt_window = vim.api.nvim_open_win(prompt_buffer, true, {
     relative = "editor",
@@ -358,12 +359,8 @@ function M.open(state, options)
     border = "rounded",
     focusable = true,
   })
-  vim.wo[prompt_window].winhighlight = "NormalFloat:ProudBackground,FloatBorder:ProudAccent"
-  vim.wo[prompt_window].wrap = false
-  vim.wo[prompt_window].cursorline = false
-  vim.wo[prompt_window].number = false
-  vim.wo[prompt_window].relativenumber = false
-  vim.wo[prompt_window].signcolumn = "yes"
+  ui.winhighlight(prompt_window, { NormalFloat = "ProudBackground", FloatBorder = "ProudAccent" })
+  ui.window_options(prompt_window, { signcolumn = "yes" })
   local prompt_header = ui.open_pane_header(prompt_window, {
     buffer_name = "proud://headers/token",
     title = "token",
