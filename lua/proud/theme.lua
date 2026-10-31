@@ -180,30 +180,6 @@ local builtins = {
   }),
 }
 
-local function apply_tabline()
-  _G.ProudTabline = function()
-    local current = vim.fn.tabpagenr()
-    local labels = {}
-    for index = 1, vim.fn.tabpagenr("$") do
-      local window = vim.fn.tabpagewinnr(index)
-      local buffers = vim.fn.tabpagebuflist(index)
-      local buffer = buffers[window] or buffers[1]
-      local valid = type(buffer) == "number" and buffer >= 0 and vim.api.nvim_buf_is_valid(buffer)
-      local name = valid and vim.api.nvim_buf_get_name(buffer) or ""
-      local label = valid and vim.b[buffer].proud_title
-        or (name == "" and "proud" or vim.fn.fnamemodify(name, ":t"))
-      if index == current then
-        labels[#labels + 1] = ("%%#ProudAccent#▌%%#ProudTabActive# %s "):format(label)
-      else
-        labels[#labels + 1] = ("%%#ProudPanel# %s %%#ProudBorder#│"):format(label)
-      end
-    end
-    local repo = vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
-    return table.concat(labels) .. "%#ProudPanel#%=" .. "%#ProudBorder#│%#ProudPanel# " .. repo .. " "
-  end
-  vim.o.tabline = "%!v:lua.ProudTabline()"
-end
-
 local function install_builtins()
   for name, definition in pairs(builtins) do
     ui.themes.replace(name, definition)
@@ -217,7 +193,6 @@ function M.setup(options)
     ui.themes.replace(name, definition)
   end
   ui.themes.use(options.theme or "proud-dark")
-  apply_tabline()
   return M.groups()
 end
 
@@ -225,9 +200,7 @@ function M.apply()
   if not ui.themes.current() then
     return M.setup()
   end
-  local groups = ui.themes.apply()
-  apply_tabline()
-  return groups
+  return ui.themes.apply()
 end
 
 function M.groups()

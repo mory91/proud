@@ -39,4 +39,18 @@ return function(test)
   test.truthy(vim.api.nvim_buf_is_valid(list_buffer), "deferred cleanup leaves a replacement buffer alone")
   test.truthy(vim.api.nvim_win_is_valid(list_window), "deferred cleanup leaves a replacement window alone")
   vim.cmd("tabclose!")
+
+  local before = ui.layout_config()
+  local custom = ui.open_pair({
+    windows = { gap = 7 },
+    panes = {
+      { name = "list", buffer_name = "proud://layout-local/list" },
+      { name = "preview", buffer_name = "proud://layout-local/preview" },
+    },
+  })
+  test.eq(before.gap, ui.layout_config().gap, "per-surface windows options do not change the global layout")
+  local list_config = vim.api.nvim_win_get_config(custom.panes.list.window)
+  local preview_config = vim.api.nvim_win_get_config(custom.panes.preview.window)
+  test.eq(7, preview_config.col - (list_config.col + list_config.width), "per-surface gap applies to that surface")
+  custom.close()
 end

@@ -15,6 +15,10 @@ local M = {
       enforce_sla = true,
     },
     ui = {
+      -- Proud's themed tabline; false keeps your own 'tabline'.
+      tabline = true,
+      -- Turn on 'termguicolors' when applying themes; false leaves it alone.
+      termguicolors = true,
       theme = "proud-sunset",
       themes = {},
       windows = {
@@ -63,7 +67,13 @@ function M.setup(options)
   general.keymaps = nil
   M.config = util.deep_merge(M.config, general)
   M.config.keymaps = keymap.setup(keymap_overrides)
+  require("proud.ui.theme").set_manage_termguicolors(M.config.ui.termguicolors)
   require("proud.theme").setup(M.config.ui)
+  if M.config.ui.tabline then
+    require("proud.ui.tabline").enable()
+  else
+    require("proud.ui.tabline").disable()
+  end
   require("proud.ui").configure(M.config.ui)
   require("proud.ui").set_status_segments({
     { " GitHub ", "ProudMuted" },

@@ -19,6 +19,8 @@ The visual direction is defined in `proud.html`. The supplied `design.html` rema
         description_debounce_ms = 80,
       },
       ui = {
+        tabline = true,        -- false keeps your own 'tabline'
+        termguicolors = true,  -- false leaves 'termguicolors' to you
         theme = "proud-dark",
         themes = {
           ocean = {

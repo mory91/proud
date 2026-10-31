@@ -1,3 +1,4 @@
+local ui_cursor = require("proud.ui.cursor")
 local ui_float = require("proud.ui.float")
 local ui_render = require("proud.ui.render")
 local ui_text = require("proud.ui.text")
@@ -184,14 +185,8 @@ function M.open(parent_window, options)
   end
 
   function header.focus(start_insert)
-    if vim.api.nvim_win_is_valid(window) then
-      vim.api.nvim_set_current_win(window)
-      if editable then
-        vim.o.guicursor = ui_window.default_guicursor
-        if start_insert then
-          vim.cmd("startinsert!")
-        end
-      end
+    if ui_cursor.focus(window) and editable and start_insert then
+      vim.cmd("startinsert!")
     end
   end
 
@@ -221,13 +216,6 @@ function M.open(parent_window, options)
             options.on_change(header.get_value())
           end
         end
-      end,
-    })
-    vim.api.nvim_create_autocmd("BufLeave", {
-      group = group,
-      buffer = buffer,
-      callback = function()
-        vim.o.guicursor = "a:block-ProudCursorHidden"
       end,
     })
   end

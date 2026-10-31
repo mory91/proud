@@ -99,7 +99,25 @@ return function(test)
   test.eq("#101828", custom.ProudBackground.bg, "Proud custom themes inherit the selected base palette")
   local accent_highlight = vim.api.nvim_get_hl(0, { name = "ProudAccent", link = false })
   test.eq("#123456", ("#%06X"):format(accent_highlight.bg), "Proud applies custom theme values to Neovim")
-  test.eq("%!v:lua.ProudTabline()", vim.o.tabline, "Proud theme application preserves its themed tabline")
+  local tabline = require("proud.ui.tabline")
+  local tabline_before = vim.o.tabline
+  proud_theme.apply()
+  test.eq(tabline_before, vim.o.tabline, "theme application no longer touches the tabline")
+  vim.o.tabline = "%f user tabline"
+  tabline.enable()
+  test.eq(tabline.expression, vim.o.tabline, "tabline.enable installs the Proud tabline")
+  test.contains(tabline.render(), "%#ProudPanel#%=", "the tabline renders Proud tab labels")
+  tabline.disable()
+  test.eq("%f user tabline", vim.o.tabline, "tabline.disable restores the user's tabline")
+  vim.o.tabline = tabline_before
+  local ui_theme = require("proud.ui.theme")
+  vim.o.termguicolors = false
+  ui_theme.set_manage_termguicolors(false)
+  proud_theme.apply()
+  test.eq(false, vim.o.termguicolors, "termguicolors can be left to the user")
+  ui_theme.set_manage_termguicolors(true)
+  proud_theme.apply()
+  test.eq(true, vim.o.termguicolors, "termguicolors is managed by default")
 
   proud_theme.setup({ theme = "proud-dark" })
   test.eq("#101828", proud_theme.groups().ProudBackground.bg, "tests restore the default Proud theme")
