@@ -74,32 +74,72 @@ function M.normalize_spacing(spacing)
   return normalized
 end
 
-function M.render(sections, spacing)
-  local normalized_sections = M.normalize_sections(sections)
-  local normalized_spacing = M.normalize_spacing(spacing)
-  local line = ""
-  local highlights = {}
-  for section_index, section in ipairs(normalized_sections) do
+-- Gap before section `index` (2-based) for a spacing value that is a
+-- number, a list (last entry repeats), or nil (one space).
+local function gap_before(spacing, index)
+  if type(spacing) == "number" then
+    return spacing
+  end
+  if type(spacing) == "table" then
+    return spacing[index - 1] or spacing[#spacing] or 1
+  end
+  return 1
+end
+
+local gap_cache = {}
+local function gap_text(count)
+  local value = gap_cache[count]
+  if not value then
+    value = string.rep(" ", count)
+    gap_cache[count] = value
+  end
+  return value
+end
+
+-- Appends already-normalized sections to a row being built in plain
+-- arrays: their text goes into `parts` after index `part_count`, and their
+-- highlights go into the flat `highlights` array for `row`, starting at
+-- byte column `col`. Returns the new part_count and col. Shared by
+-- render() and the tree component's hot loop (no allocation per part).
+function M.append_flat(parts, part_count, highlights, row, col, sections, spacing)
+  for section_index, section in ipairs(sections) do
     if section_index > 1 then
-      local gap = normalized_spacing[section_index - 1]
-        or normalized_spacing[#normalized_spacing]
-        or 0
-      line = line .. string.rep(" ", gap)
+      local gap = gap_text(gap_before(spacing, section_index))
+      part_count = part_count + 1
+      parts[part_count] = gap
+      col = col + #gap
     end
     for _, part in ipairs(section.parts) do
-      local start_col = #line
-      line = line .. part.text
-      if part.group and part.text ~= "" then
-        table.insert(highlights, {
-          line = 0,
-          start_col = start_col,
-          end_col = #line,
-          group = part.group,
-        })
+      local text = part.text
+      part_count = part_count + 1
+      parts[part_count] = text
+      if part.group and text ~= "" then
+        local n = #highlights
+        highlights[n + 1] = row
+        highlights[n + 2] = col
+        highlights[n + 3] = col + #text
+        highlights[n + 4] = part.group
       end
+      col = col + #text
     end
   end
-  return line, highlights
+  return part_count, col
+end
+
+-- Renders one row; returns the line and keyed highlights.
+function M.render(sections, spacing)
+  local parts, flat = {}, {}
+  local count = M.append_flat(parts, 0, flat, 0, 0, M.normalize_sections(sections), M.normalize_spacing(spacing))
+  local highlights = {}
+  for index = 1, #flat, 4 do
+    table.insert(highlights, {
+      line = 0,
+      start_col = flat[index + 1],
+      end_col = flat[index + 2],
+      group = flat[index + 3],
+    })
+  end
+  return table.concat(parts, "", 1, count), highlights
 end
 
 return M

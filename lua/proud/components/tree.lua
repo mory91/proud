@@ -241,49 +241,15 @@ function M.render(state, width)
   local highlights = {}
   local parts = {}
   local line_count = 0
-  local highlight_count = 0
-  local function gap_value(spacing, index)
-    if type(spacing) == "number" then
-      return spacing
-    end
-    if type(spacing) == "table" then
-      return spacing[index] or spacing[#spacing] or 1
-    end
-    return 1
-  end
-
   local function render_node(node)
     local marker = node.marker
     if marker == nil then
       marker = expandable(node) and (node.expanded and "▾ " or "▸ ") or "  "
     end
     local prefix = spaces(node.depth * 2) .. marker
-    local part_count = 1
     parts[1] = prefix
-    local content_width = #prefix
-    local row = line_count
-    for section_index, section in ipairs(node.sections) do
-      if section_index > 1 then
-        local gap = spaces(gap_value(node.spacing, section_index - 1))
-        part_count = part_count + 1
-        parts[part_count] = gap
-        content_width = content_width + #gap
-      end
-      for _, part in ipairs(section.parts) do
-        local start_col = content_width
-        part_count = part_count + 1
-        parts[part_count] = part.text
-        content_width = content_width + #part.text
-        if part.group and part.text ~= "" then
-          highlight_count = highlight_count + 4
-          highlights[highlight_count - 3] = row
-          highlights[highlight_count - 2] = start_col
-          highlights[highlight_count - 1] = content_width
-          highlights[highlight_count] = part.group
-        end
-      end
-    end
-    local line = table.concat(parts)
+    local part_count = section_row.append_flat(parts, 1, highlights, line_count, #prefix, node.sections, node.spacing)
+    local line = table.concat(parts, "", 1, part_count)
     for index = 1, part_count do
       parts[index] = nil
     end
