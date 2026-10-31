@@ -314,10 +314,6 @@ local function layout_widths(width)
   return left_width, math.max(10, terminal_width - left_width - 2)
 end
 
-local function add_span(lines, highlights, line, needle, group, flat)
-  return ui.view.span(lines, highlights, line, needle, group, flat and "flat" or "tuple")
-end
-
 local function push_flat(highlights, row, start_col, end_col, group)
   table.insert(highlights, row)
   table.insert(highlights, start_col)
@@ -430,10 +426,10 @@ function M.render_list(state, options)
   add("")
   add("Select a pull request to open its review overview.")
   add("Visible " .. #state.filtered .. "  ·  Source " .. state.source)
-  add_span(lines, highlights, #lines - 2, "Select a pull request", "ProudAccentText", true)
-  add_span(lines, highlights, #lines - 2, "review overview", "ProudSuccessText", true)
-  add_span(lines, highlights, #lines - 1, "Visible", "ProudMuted", true)
-  add_span(lines, highlights, #lines - 1, "Source", "ProudMuted", true)
+  ui.view.span(lines, highlights, #lines - 2, "Select a pull request", "ProudAccentText", "flat")
+  ui.view.span(lines, highlights, #lines - 2, "review overview", "ProudSuccessText", "flat")
+  ui.view.span(lines, highlights, #lines - 1, "Visible", "ProudMuted", "flat")
+  ui.view.span(lines, highlights, #lines - 1, "Source", "ProudMuted", "flat")
   return { lines = lines, highlights = highlights, highlight_format = "flat" }
 end
 
@@ -484,43 +480,43 @@ function M.render_preview(state, options)
   end
   local highlights = {}
   if selected then
-    add_span(lines, highlights, 0, "#" .. safe_text(selected.number, "0"), "ProudAccentText")
-    add_span(lines, highlights, 0, safe_text(selected.title, "Untitled pull request"), "ProudBright")
+    ui.view.span(lines, highlights, 0, "#" .. safe_text(selected.number, "0"), "ProudAccentText", "tuple")
+    ui.view.span(lines, highlights, 0, safe_text(selected.title, "Untitled pull request"), "ProudBright", "tuple")
     local state_label = safe_text(selected.state, selected.is_draft and "Draft" or "Open")
-    add_span(lines, highlights, 1, "● " .. state_label, status_highlight(selected))
-    add_span(lines, highlights, 1, pull_author(selected), "ProudAccentText")
-    add_span(lines, highlights, 2, safe_text(selected.head_ref, ""), "ProudAccentText")
-    add_span(lines, highlights, 2, safe_text(selected.base_ref, "main"), "ProudAccentText")
-    add_span(lines, highlights, 3, "+" .. tostring(safe_number(selected.additions, 0)), "ProudSuccessText")
-    add_span(lines, highlights, 3, "-" .. tostring(safe_number(selected.deletions, 0)), "ProudDangerText")
-    add_span(lines, highlights, 3, "◆" .. tostring(safe_number(selected.threads, 0)), "ProudWarning")
-    add_span(lines, highlights, 3, safe_text(selected.age, "now"), "ProudMuted")
+    ui.view.span(lines, highlights, 1, "● " .. state_label, status_highlight(selected), "tuple")
+    ui.view.span(lines, highlights, 1, pull_author(selected), "ProudAccentText", "tuple")
+    ui.view.span(lines, highlights, 2, safe_text(selected.head_ref, ""), "ProudAccentText", "tuple")
+    ui.view.span(lines, highlights, 2, safe_text(selected.base_ref, "main"), "ProudAccentText", "tuple")
+    ui.view.span(lines, highlights, 3, "+" .. tostring(safe_number(selected.additions, 0)), "ProudSuccessText", "tuple")
+    ui.view.span(lines, highlights, 3, "-" .. tostring(safe_number(selected.deletions, 0)), "ProudDangerText", "tuple")
+    ui.view.span(lines, highlights, 3, "◆" .. tostring(safe_number(selected.threads, 0)), "ProudWarning", "tuple")
+    ui.view.span(lines, highlights, 3, safe_text(selected.age, "now"), "ProudMuted", "tuple")
     local reviewer_values = reviewers(selected)
     for index, reviewer in ipairs(reviewer_values) do
       local row = 3 + index
       if index == 1 then
-        add_span(lines, highlights, row, "Reviewers", "ProudMuted")
+        ui.view.span(lines, highlights, row, "Reviewers", "ProudMuted", "tuple")
       end
-      add_span(lines, highlights, row, reviewer.login, "ProudAccentText")
+      ui.view.span(lines, highlights, row, reviewer.login, "ProudAccentText", "tuple")
       local label = reviewer_state_labels[reviewer.state] or reviewer.state
-      add_span(lines, highlights, row, label, reviewer_state_highlights[reviewer.state] or "ProudAccentText")
+      ui.view.span(lines, highlights, row, label, reviewer_state_highlights[reviewer.state] or "ProudAccentText", "tuple")
     end
     local labels_row = 4 + math.max(#reviewer_values, 1)
-    add_span(lines, highlights, labels_row, "Labels", "ProudMuted")
+    ui.view.span(lines, highlights, labels_row, "Labels", "ProudMuted", "tuple")
     local label_text = table.concat(labels(selected), " · ")
-    add_span(lines, highlights, labels_row, label_text ~= "" and label_text or "none", "ProudAccentText")
+    ui.view.span(lines, highlights, labels_row, label_text ~= "" and label_text or "none", "ProudAccentText", "tuple")
     for index, line in ipairs(description) do
       local row = labels_row + 1 + index
       if line:match("^#+%s+") then
-        add_span(lines, highlights, row, line, "ProudAccentText")
+        ui.view.span(lines, highlights, row, line, "ProudAccentText", "tuple")
       elseif line:match("^%- %[x%]") then
-        add_span(lines, highlights, row, "- [x]", "ProudSuccessText")
+        ui.view.span(lines, highlights, row, "- [x]", "ProudSuccessText", "tuple")
       elseif line:match("^%- %[ %]") then
-        add_span(lines, highlights, row, "- [ ]", "ProudWarning")
+        ui.view.span(lines, highlights, row, "- [ ]", "ProudWarning", "tuple")
       end
     end
   else
-    add_span(lines, highlights, 0, "No pull request selected", "ProudMuted")
+    ui.view.span(lines, highlights, 0, "No pull request selected", "ProudMuted", "tuple")
   end
   return { lines = lines, highlights = highlights }
 end

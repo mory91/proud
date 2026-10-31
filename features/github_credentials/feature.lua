@@ -127,8 +127,6 @@ function M.create(options)
   }
 end
 
-local add_span = ui.view.span
-
 function M.render(state)
   local lines = {
     "proud credentials",
@@ -147,19 +145,19 @@ function M.render(state)
     state.busy and "Validating…" or "Submit or cancel from the focused token field.",
   }
   local highlights = {}
-  add_span(lines, highlights, 0, "proud credentials", "ProudAccentText")
-  add_span(lines, highlights, 2, "GitHub token required", "ProudAccentText")
-  add_span(lines, highlights, 3, "Error", "ProudDangerText")
+  ui.view.span(lines, highlights, 0, "proud credentials", "ProudAccentText")
+  ui.view.span(lines, highlights, 2, "GitHub token required", "ProudAccentText")
+  ui.view.span(lines, highlights, 3, "Error", "ProudDangerText")
   if not state.busy then
-    add_span(lines, highlights, 5, "type the token in the page below", "ProudAccentText")
-    add_span(lines, highlights, 5, "repository read access", "ProudSuccessText")
+    ui.view.span(lines, highlights, 5, "type the token in the page below", "ProudAccentText")
+    ui.view.span(lines, highlights, 5, "repository read access", "ProudSuccessText")
   end
-  add_span(lines, highlights, 7, "hidden", "ProudSuccessText")
-  add_span(lines, highlights, 7, "owner-only", "ProudSuccessText")
-  add_span(lines, highlights, 8, "reused", "ProudSuccessText")
-  add_span(lines, highlights, 9, "Help", "ProudAccentText")
-  add_span(lines, highlights, 11, "Credential", "ProudMuted")
-  add_span(lines, highlights, 13, state.busy and "Validating…" or "Submit", "ProudAccentText")
+  ui.view.span(lines, highlights, 7, "hidden", "ProudSuccessText")
+  ui.view.span(lines, highlights, 7, "owner-only", "ProudSuccessText")
+  ui.view.span(lines, highlights, 8, "reused", "ProudSuccessText")
+  ui.view.span(lines, highlights, 9, "Help", "ProudAccentText")
+  ui.view.span(lines, highlights, 11, "Credential", "ProudMuted")
+  ui.view.span(lines, highlights, 13, state.busy and "Validating…" or "Submit", "ProudAccentText")
   return { lines = lines, highlights = highlights }
 end
 
