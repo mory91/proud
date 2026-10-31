@@ -72,6 +72,7 @@ M.button_layout = selector.button_layout
 M.open_pair = surface.open_pair
 M.open_float = modal.open_float
 M.set_cursor = window.set_cursor
+M.set_status_segments = window.set_status_segments
 M.buffer = window.buffer
 M.window_options = window.options
 M.winhighlight = window.winhighlight

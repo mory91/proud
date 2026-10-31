@@ -2,29 +2,27 @@ local M = {}
 
 M.default_guicursor = vim.o.guicursor
 
+-- Fallback tab/status title when a caller passes none: the buffer name
+-- without its proud:// scheme. Features pass explicit titles.
 function M.title_for(name)
-  if name == "proud://prs" then
-    return "proud: pull requests"
+  return (tostring(name or ""):gsub("^proud://", ""))
+end
+
+-- Right-hand statusline segments shown in every decorated window, as
+-- { { text, group }, ... }. Empty by default; the application sets them
+-- (see proud.init setup). Text is inserted verbatim into 'statusline'.
+M.status_segments = {}
+
+function M.set_status_segments(segments)
+  M.status_segments = segments or {}
+end
+
+local function status_right()
+  local parts = {}
+  for _, segment in ipairs(M.status_segments) do
+    parts[#parts + 1] = "%#" .. segment[2] .. "#" .. segment[1]
   end
-  if name == "proud://prs/preview" then
-    return "Preview"
-  end
-  if name:match("^proud://help") then
-    return "Proud help"
-  end
-  local number, mode = name:match("^proud://pr/(%d+)/diff/(%w+)$")
-  if number then
-    return ("#%s diff · %s"):format(number, mode)
-  end
-  number = name:match("^proud://pr/(%d+)/overview$")
-  if number then
-    return ("#%s overview"):format(number)
-  end
-  local compare = name:match("^proud://compare/(.+)$")
-  if compare then
-    return "compare  " .. compare
-  end
-  return name:gsub("^proud://", "")
+  return table.concat(parts)
 end
 
 -- Window-local options shared by every Proud window: no gutters, no
@@ -113,9 +111,7 @@ function M.decorate(window, buffer, name, options)
     "%#ProudBorder#▎",
     "%<",
     "%#ProudPanel#%=",
-    "%#ProudMuted# GitHub ",
-    "%#ProudSuccessText# api ",
-    "%#ProudSuccess#✓ ",
+    status_right(),
     "%#ProudPanel# ",
   })
 end

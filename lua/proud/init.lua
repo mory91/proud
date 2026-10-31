@@ -65,6 +65,11 @@ function M.setup(options)
   M.config.keymaps = keymap.setup(keymap_overrides)
   require("proud.theme").setup(M.config.ui)
   require("proud.ui").configure(M.config.ui)
+  require("proud.ui").set_status_segments({
+    { " GitHub ", "ProudMuted" },
+    { " api ", "ProudSuccessText" },
+    { "✓ ", "ProudSuccess" },
+  })
   session.configure(M.config.provider)
   vim.api.nvim_create_user_command("Proud", function(command_options)
     local subcommand = vim.split(command_options.args, "%s+", { trimempty = true })[1]
