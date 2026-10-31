@@ -1,30 +1,28 @@
+local ui_cursor = require("proud.ui.cursor")
+
 local M = {}
 
-M.default_guicursor = vim.o.guicursor
-
+-- Fallback tab/status title when a caller passes none: the buffer name
+-- without its proud:// scheme. Features pass explicit titles.
 function M.title_for(name)
-  if name == "proud://prs" then
-    return "proud: pull requests"
+  return (tostring(name or ""):gsub("^proud://", ""))
+end
+
+-- Right-hand statusline segments shown in every decorated window, as
+-- { { text, group }, ... }. Empty by default; the application sets them
+-- (see proud.init setup). Text is inserted verbatim into 'statusline'.
+M.status_segments = {}
+
+function M.set_status_segments(segments)
+  M.status_segments = segments or {}
+end
+
+local function status_right()
+  local parts = {}
+  for _, segment in ipairs(M.status_segments) do
+    parts[#parts + 1] = "%#" .. segment[2] .. "#" .. segment[1]
   end
-  if name == "proud://prs/preview" then
-    return "Preview"
-  end
-  if name:match("^proud://help") then
-    return "Proud help"
-  end
-  local number, mode = name:match("^proud://pr/(%d+)/diff/(%w+)$")
-  if number then
-    return ("#%s diff · %s"):format(number, mode)
-  end
-  number = name:match("^proud://pr/(%d+)/overview$")
-  if number then
-    return ("#%s overview"):format(number)
-  end
-  local compare = name:match("^proud://compare/(.+)$")
-  if compare then
-    return "compare  " .. compare
-  end
-  return name:gsub("^proud://", "")
+  return table.concat(parts)
 end
 
 -- Window-local options shared by every Proud window: no gutters, no
@@ -76,7 +74,7 @@ end
 
 function M.decorate(window, buffer, name, options)
   options = options or {}
-  vim.o.guicursor = options.hide_cursor and "a:block-ProudCursorHidden" or M.default_guicursor
+  ui_cursor.set_window(window, options.hide_cursor and "hidden" or options.cursor_shape)
   local normal_group = options.normal_group or "ProudBackground"
   local normal_nc_group = options.normal_nc_group or normal_group
   local float_group = options.float_group or "ProudBackground"
@@ -113,9 +111,7 @@ function M.decorate(window, buffer, name, options)
     "%#ProudBorder#▎",
     "%<",
     "%#ProudPanel#%=",
-    "%#ProudMuted# GitHub ",
-    "%#ProudSuccessText# api ",
-    "%#ProudSuccess#✓ ",
+    status_right(),
     "%#ProudPanel# ",
   })
 end
@@ -127,6 +123,26 @@ M.base_buffer_options = {
   swapfile = false,
   modifiable = false,
 }
+
+-- Installed on first buffer creation (not at require time): clears the
+-- modified flag on Proud buffers so :quit never stops on them.
+local quit_guard_installed = false
+local function install_quit_guard()
+  if quit_guard_installed then
+    return
+  end
+  quit_guard_installed = true
+  vim.api.nvim_create_autocmd("QuitPre", {
+    group = vim.api.nvim_create_augroup("ProudBufferLifecycle", { clear = true }),
+    callback = function()
+      for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_valid(buffer) and vim.b[buffer].proud_buffer then
+          vim.bo[buffer].modified = false
+        end
+      end
+    end,
+  })
+end
 
 local function find_buffer(name)
   for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
@@ -141,6 +157,7 @@ end
 -- options.bo overrides or extends M.base_buffer_options.
 function M.buffer(name, options)
   options = options or {}
+  install_quit_guard()
   local buffer = name and options.reuse ~= false and find_buffer(name) or nil
   if not buffer then
     buffer = vim.api.nvim_create_buf(false, true)

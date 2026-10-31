@@ -764,12 +764,8 @@ function M.attach(buffer, state, options)
     query_debouncer:schedule(value, query_generation)
   end
   state.return_to_list = function()
-    if options.surface and vim.api.nvim_win_is_valid(options.surface.panes.list.window) then
-      vim.api.nvim_set_current_win(options.surface.panes.list.window)
-      vim.o.guicursor = "a:block-ProudCursorHidden"
-      if state.refresh then
-        state.refresh()
-      end
+    if options.surface and options.surface.focus("list") and state.refresh then
+      state.refresh()
     end
   end
   keymap.map(buffer, "n", "next_item", function()
@@ -799,10 +795,14 @@ function M.attach(buffer, state, options)
     scroll_preview(-math.max(1, math.floor(height / 2)))
   end, "Scroll pull request description up")
   keymap.map(buffer, "n", "focus_preview", function()
+    if options.surface then
+      options.surface.focus("preview")
+      return
+    end
     local window = preview_window()
     if window and vim.api.nvim_win_is_valid(window) then
-      vim.api.nvim_set_current_win(window)
-      vim.o.guicursor = "a:block-ProudAccent"
+      ui.cursor.set_window(window, "accent")
+      ui.cursor.focus(window)
       local line_count = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(window))
       local row = math.max(1, math.min(line_count, 3))
       pcall(vim.api.nvim_win_set_cursor, window, { row, 0 })
@@ -865,30 +865,68 @@ function M.open(state, options)
   local mode = options.mode or "surface"
   local left_width, right_width = layout_widths(vim.o.columns)
   if mode == "surface" then
-    local surface = ui.open_rounded_pair({
-      list = M.render_list(state, { width = math.floor(vim.o.columns * 0.48) }),
-      preview = M.render_preview(state, { width = math.floor(vim.o.columns * 0.48) }),
-    }, {
+    local initial_width = math.floor(vim.o.columns * 0.48)
+    local surface = ui.open_pair({
       title = "proud: pull requests",
       statusline = "pull requests",
-      list_name = "proud://prs/list",
-      preview_name = "proud://prs/preview",
-      list_title = "proud: pull requests",
-      preview_title = "Preview",
-      headers = {
-        list = {
-          value = state.display_query,
-          trailing_segments = count_segments(state),
-          on_change = function(value)
-            if state.apply_filter then
-              state.apply_filter(value)
-            end
-          end,
-          on_submit = function()
-            if state.return_to_list then
-              state.return_to_list()
-            end
-          end,
+      panes = {
+        {
+          name = "list",
+          buffer_name = "proud://prs/list",
+          title = "proud: pull requests",
+          view = M.render_list(state, { width = initial_width }),
+          top_pad = 2,
+          cursor = "hidden",
+          header = {
+            buffer_name = "proud://headers/list",
+            title = "pull request filters",
+            prompt = "PR > ",
+            placeholder = "...",
+            prompt_segments = {
+              { text = "PR", group = "ProudAccentText" },
+              { text = " > ", group = "ProudBorder" },
+            },
+            value_group = "ProudBright",
+            placeholder_group = "ProudMuted",
+            value = state.display_query,
+            trailing_segments = count_segments(state),
+            on_change = function(value)
+              if state.apply_filter then
+                state.apply_filter(value)
+              end
+            end,
+            on_submit = function()
+              if state.return_to_list then
+                state.return_to_list()
+              end
+            end,
+          },
+          separator = "ProudBorder",
+          separator_buffer_name = "proud://headers/list-separator",
+        },
+        {
+          name = "preview",
+          buffer_name = "proud://prs/preview",
+          title = "Preview",
+          view = M.render_preview(state, { width = initial_width }),
+          top_pad = 2,
+          cursor = "accent",
+          focus_row = 3,
+          decorate = {
+            cursor_group = "ProudAccent",
+            float_border = "ProudPreviewBorder",
+            float_title = "ProudPreviewTitle",
+          },
+          header = {
+            buffer_name = "proud://headers/preview",
+            title = "preview",
+            text = "Preview",
+            text_group = "ProudPreviewBorder",
+            border_group = "ProudPreviewBorder",
+            focusable = false,
+          },
+          separator = "ProudBorder",
+          separator_buffer_name = "proud://headers/preview-separator",
         },
       },
       selector = {

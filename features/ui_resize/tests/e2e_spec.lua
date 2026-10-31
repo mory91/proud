@@ -1,11 +1,16 @@
 return function(test)
   local feature = require("proud.loader").load("ui_resize")
   local ui = require("proud.ui")
+  local function open_pair(list_view, preview_view, prefix)
+    return ui.open_pair({
+      panes = {
+        { name = "list", buffer_name = prefix .. "/list", view = list_view },
+        { name = "preview", buffer_name = prefix .. "/preview", view = preview_view },
+      },
+    })
+  end
   local keymap = require("proud.keymap")
-  local surface = ui.open_rounded_pair({ list = { lines = { "list row" } }, preview = { lines = { "preview row" } } }, {
-    list_name = "proud://resize/list",
-    preview_name = "proud://resize/preview",
-  })
+  local surface = open_pair({ lines = { "list row" } }, { lines = { "preview row" } }, "proud://resize")
   local expected = feature.surface_geometry(vim.o.columns, vim.o.lines)
   test.truthy(feature.validate_surface(surface, expected), "rounded surface starts with live geometry")
   vim.o.columns = math.max(40, vim.o.columns - 8)
@@ -13,6 +18,8 @@ return function(test)
   surface.resize()
   expected = feature.surface_geometry(vim.o.columns, vim.o.lines)
   test.truthy(feature.validate_surface(surface, expected), "rounded surface relayouts after a terminal shrink")
+  test.eq(true, vim.api.nvim_win_get_config(surface.panes.preview.window).focusable, "preview stays focusable after resize")
+  test.eq(true, vim.api.nvim_win_get_config(surface.panes.list.window).focusable, "list stays focusable after resize")
   vim.o.columns = vim.o.columns + 8
   vim.o.lines = vim.o.lines + 2
   surface.resize()
@@ -36,25 +43,13 @@ return function(test)
   test.contains(table.concat(vim.api.nvim_buf_get_lines(workspace.panes.left.buffer, 0, -1, false), "\n"), "left resized")
   vim.cmd("tabclose!")
 
-  local deleted_surface = ui.open_rounded_pair({
-    list = { lines = { "delete target" } },
-    preview = { lines = { "delete companion" } },
-  }, {
-    list_name = "proud://lifecycle-delete/list",
-    preview_name = "proud://lifecycle-delete/preview",
-  })
+  local deleted_surface = open_pair({ lines = { "delete target" } }, { lines = { "delete companion" } }, "proud://lifecycle-delete")
   local deleted_tabpage = deleted_surface.tabpage
   vim.api.nvim_buf_delete(deleted_surface.panes.list.buffer, { force = true })
   test.truthy(vim.wait(1000, deleted_surface.lifecycle.closed, 10), "deleting an owned buffer closes its scene")
   test.truthy(not vim.api.nvim_tabpage_is_valid(deleted_tabpage), "buffer deletion closes the whole scene tabpage")
 
-  local quit_surface = ui.open_rounded_pair({
-    list = { lines = { "quit target" } },
-    preview = { lines = { "quit companion" } },
-  }, {
-    list_name = "proud://lifecycle-quit/list",
-    preview_name = "proud://lifecycle-quit/preview",
-  })
+  local quit_surface = open_pair({ lines = { "quit target" } }, { lines = { "quit companion" } }, "proud://lifecycle-quit")
   local quit_tabpage = quit_surface.tabpage
   keymap.bind_common_buffer(quit_surface.panes.preview.buffer, { on_quit = quit_surface.close })
   vim.api.nvim_buf_delete(quit_surface.panes.list.buffer, { force = true })

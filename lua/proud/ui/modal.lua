@@ -1,3 +1,4 @@
+local ui_cursor = require("proud.ui.cursor")
 local ui_header = require("proud.ui.header")
 local ui_render = require("proud.ui.render")
 local ui_window = require("proud.ui.window")
@@ -6,7 +7,6 @@ local M = {}
 
 function M.open_float(view, name, options)
   options = options or {}
-  vim.o.guicursor = ui_window.default_guicursor
   local width = options.width or math.min(vim.o.columns - 8, 132)
   local height = options.height or math.min(vim.o.lines - 8, 34)
   local row = options.row or math.floor((vim.o.lines - height) / 2)
@@ -26,6 +26,7 @@ function M.open_float(view, name, options)
   vim.b[buffer].proud_title = ui_window.title_for(name)
   vim.wo[window].statusline = "%#ProudAccent# PROUD %#ProudPanel# Help available"
   ui_render.render(buffer, view)
+  ui_cursor.refresh()
   local header = options.header and ui_header.open(window, options.header) or nil
   return buffer, window, header
 end

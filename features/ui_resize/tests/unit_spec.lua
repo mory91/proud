@@ -1,6 +1,14 @@
 return function(test)
   local feature = require("proud.loader").load("ui_resize")
   local ui = require("proud.ui")
+  local function open_pair(list_view, preview_view, prefix)
+    return ui.open_pair({
+      panes = {
+        { name = "list", buffer_name = prefix .. "/list", view = list_view },
+        { name = "preview", buffer_name = prefix .. "/preview", view = preview_view },
+      },
+    })
+  end
   local geometry = feature.surface_geometry(120, 40)
   test.eq(3, geometry.gap, "default rounded surface keeps the configured gap")
   test.truthy(geometry.height > 0 and geometry.height <= 34, "surface height remains inside the editor area")
@@ -17,13 +25,7 @@ return function(test)
   test.eq("short", view.lines[1])
   test.eq("a much longer row that must be clipped safely", view.lines[2])
 
-  local surface = ui.open_rounded_pair({
-    list = { lines = { "owned list" } },
-    preview = { lines = { "owned preview" } },
-  }, {
-    list_name = "proud://lifecycle-owned/list",
-    preview_name = "proud://lifecycle-owned/preview",
-  })
+  local surface = open_pair({ lines = { "owned list" } }, { lines = { "owned preview" } }, "proud://lifecycle-owned")
   local tabpage = surface.tabpage
   local list_buffer = surface.panes.list.buffer
   local list_window = surface.panes.list.window
@@ -37,4 +39,18 @@ return function(test)
   test.truthy(vim.api.nvim_buf_is_valid(list_buffer), "deferred cleanup leaves a replacement buffer alone")
   test.truthy(vim.api.nvim_win_is_valid(list_window), "deferred cleanup leaves a replacement window alone")
   vim.cmd("tabclose!")
+
+  local before = ui.layout_config()
+  local custom = ui.open_pair({
+    windows = { gap = 7 },
+    panes = {
+      { name = "list", buffer_name = "proud://layout-local/list" },
+      { name = "preview", buffer_name = "proud://layout-local/preview" },
+    },
+  })
+  test.eq(before.gap, ui.layout_config().gap, "per-surface windows options do not change the global layout")
+  local list_config = vim.api.nvim_win_get_config(custom.panes.list.window)
+  local preview_config = vim.api.nvim_win_get_config(custom.panes.preview.window)
+  test.eq(7, preview_config.col - (list_config.col + list_config.width), "per-surface gap applies to that surface")
+  custom.close()
 end

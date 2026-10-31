@@ -8,6 +8,6 @@ require("proud").setup()
 vim.api.nvim_create_autocmd("ColorScheme", {
   group = vim.api.nvim_create_augroup("ProudTheme", { clear = true }),
   callback = function()
-    require("proud.theme").apply()
+    require("proud.palette").apply()
   end,
 })

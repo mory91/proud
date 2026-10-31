@@ -2,6 +2,7 @@
 -- Implementation lives in focused modules under lua/proud/ui/; this file
 -- re-exports the stable API so callers never depend on the module layout.
 local config = require("proud.ui.config")
+local cursor = require("proud.ui.cursor")
 local float = require("proud.ui.float")
 local geometry = require("proud.ui.geometry")
 local header = require("proud.ui.header")
@@ -21,21 +22,10 @@ local M = {
   themes = themes,
   geometry = geometry,
   float = float,
+  cursor = cursor,
   text = text,
   view = view,
 }
-
-local buffer_lifecycle_group = vim.api.nvim_create_augroup("ProudBufferLifecycle", { clear = true })
-vim.api.nvim_create_autocmd("QuitPre", {
-  group = buffer_lifecycle_group,
-  callback = function()
-    for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
-      if vim.api.nvim_buf_is_valid(buffer) and vim.b[buffer].proud_buffer then
-        vim.bo[buffer].modified = false
-      end
-    end
-  end,
-})
 
 -- Themes
 function M.add_theme(name, definition, options)
@@ -69,9 +59,10 @@ M.fit_view = render.fit_view
 M.create_scene_lifecycle = lifecycle.create_scene_lifecycle
 M.open_pane_header = header.open
 M.button_layout = selector.button_layout
-M.open_rounded_pair = surface.open_rounded_pair
+M.open_pair = surface.open_pair
 M.open_float = modal.open_float
 M.set_cursor = window.set_cursor
+M.set_status_segments = window.set_status_segments
 M.buffer = window.buffer
 M.window_options = window.options
 M.winhighlight = window.winhighlight

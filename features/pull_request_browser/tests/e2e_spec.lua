@@ -187,7 +187,7 @@ return function(test)
   test.contains(vim.wo[state.surface.panes.list.header.window].winhighlight, "Normal:ProudBackground", "list header uses the shared base background")
   test.contains(vim.wo[state.surface.panes.preview.header.window].winhighlight, "Normal:ProudBackground", "preview header uses the shared base background")
   test.contains(vim.o.guicursor, "ProudCursorHidden", "browser uses the TUI hidden cursor style")
-  test.eq(100, require("proud.theme").groups().ProudCursorHidden.blend, "hidden cursor uses TUI blend hiding")
+  test.eq(100, require("proud.palette").groups().ProudCursorHidden.blend, "hidden cursor uses TUI blend hiding")
   local list_config = vim.api.nvim_win_get_config(state.surface.panes.list.window)
   local preview_config = vim.api.nvim_win_get_config(state.surface.panes.preview.window)
   local preview_header = state.surface.panes.preview.header
@@ -244,7 +244,7 @@ return function(test)
   test.contains(vim.wo[state.surface.panes.list.window].winhighlight, "FloatBorder:ProudAccentText", "float border is purple")
   test.contains(vim.wo[state.surface.panes.preview.window].winhighlight, "FloatBorder:ProudPreviewBorder", "preview border is muted grey")
   test.contains(vim.wo[state.surface.panes.preview.window].winhighlight, "FloatTitle:ProudPreviewTitle", "preview title is muted grey")
-  test.eq(35, require("proud.theme").groups().ProudPreviewBorder.blend, "preview border uses low opacity")
+  test.eq(35, require("proud.palette").groups().ProudPreviewBorder.blend, "preview border uses low opacity")
   vim.cmd("silent! tabclose!")
 
   local page_requests = {}
