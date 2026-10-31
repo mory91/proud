@@ -1,4 +1,5 @@
 local themes = require("proud.ui.theme")
+local geometry_math = require("proud.ui.geometry")
 
 local M = {
   themes = themes,
@@ -1195,39 +1196,7 @@ function M.open_rounded_pair(views, options)
   local preview_buffer = prepare_buffer(options.preview_name or "proud://prs/preview")
   local configured_layout = options.windows and M.configure(options.windows) or M.layout_config()
   local function geometry()
-    local screen_width = math.max(1, vim.o.columns)
-    local margin = vim.deepcopy(configured_layout.margin)
-    local top = (vim.o.showtabline == 2 or (vim.o.showtabline == 1 and vim.fn.tabpagenr("$") > 1)) and 1 or 0
-    local bottom = vim.o.cmdheight + (vim.o.laststatus > 0 and 1 or 0)
-    local editor_height = math.max(3, vim.o.lines - top - bottom)
-    local outer_height = editor_height - margin.top - margin.bottom
-    if outer_height < 3 then
-      local overflow = 3 - outer_height
-      local top_reduction = math.min(margin.top, math.ceil(overflow / 2))
-      margin.top = margin.top - top_reduction
-      margin.bottom = math.max(0, margin.bottom - (overflow - top_reduction))
-      outer_height = 3
-    end
-    local available_width = math.max(2, screen_width - margin.left - margin.right)
-    local gap = configured_layout.gap
-    if available_width < 48 then
-      gap = math.min(gap, 1)
-    end
-    gap = math.min(gap, math.max(0, available_width - 2))
-    local left_width = math.max(1, math.floor((available_width - gap) / 2))
-    local right_width = math.max(1, available_width - gap - left_width)
-    return {
-      top = top,
-      bottom = bottom,
-      row = top + margin.top + 1,
-      left_col = margin.left,
-      right_col = margin.left + left_width + gap,
-      left_width = left_width,
-      right_width = right_width,
-      height = outer_height - 2,
-      gap = gap,
-      available_width = left_width + gap + right_width,
-    }
+    return geometry_math.surface(vim.o.columns, vim.o.lines, configured_layout)
   end
   local initial_geometry = geometry()
 
@@ -1495,22 +1464,7 @@ function M.open_split(view, name, direction)
   return buffer, window
 end
 
-local function calculate_widths(weights, total_columns)
-  local pane_count = #weights
-  local available = math.max(pane_count * 8, total_columns - math.max(0, pane_count - 1))
-  local total_weight = 0
-  for _, weight in ipairs(weights) do
-    total_weight = total_weight + weight
-  end
-  local widths = {}
-  local assigned = 0
-  for index, weight in ipairs(weights) do
-    local width = index == pane_count and available - assigned or math.floor(available * weight / total_weight)
-    widths[index] = math.max(8, width)
-    assigned = assigned + widths[index]
-  end
-  return widths
-end
+local calculate_widths = geometry_math.workspace_widths
 
 function M.open_workspace(name, panes, options)
   options = options or {}

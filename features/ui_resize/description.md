@@ -7,7 +7,7 @@ Each scene receives a unique lifecycle identity on its tabpage, buffers, and win
 ## Related Code
 
 - `feature.lua` exposes the resize contract and validates surface/workspace geometry.
-- `lua/proud/ui.lua` owns rounded-surface and workspace layout calculations.
+- `lua/proud/ui/geometry.lua` owns rounded-surface and workspace layout calculations, shared by the renderer and this feature.
 - `lua/proud/ui.lua` also owns scene identity and complete buffer/window lifecycle cleanup.
 - `tests/unit_spec.lua` verifies deterministic resize calculations and straight fitted views.
 - `tests/e2e_spec.lua` verifies relayout, buffer-deletion cleanup, pre-cleanup quit, and replacement ownership in real Neovim windows.

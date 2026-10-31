@@ -1,64 +1,20 @@
 local ui = require("proud.ui")
+local geometry = require("proud.ui.geometry")
 
 local M = {}
 
 function M.surface_geometry(columns, lines, options)
   options = options or {}
-  columns = math.max(1, math.floor(columns or vim.o.columns or 1))
-  lines = math.max(1, math.floor(lines or vim.o.lines or 1))
-  local margin = vim.deepcopy((options.windows and options.windows.margin) or ui.layout_config().margin)
-  local gap = (options.windows and options.windows.gap) or ui.layout_config().gap
-  local top = (vim.o.showtabline == 2 or (vim.o.showtabline == 1 and vim.fn.tabpagenr("$") > 1)) and 1 or 0
-  local bottom = vim.o.cmdheight + (vim.o.laststatus > 0 and 1 or 0)
-  local editor_height = math.max(3, lines - top - bottom)
-  local outer_height = editor_height - margin.top - margin.bottom
-  if outer_height < 3 then
-    local overflow = 3 - outer_height
-    local top_reduction = math.min(margin.top, math.ceil(overflow / 2))
-    margin.top = margin.top - top_reduction
-    margin.bottom = math.max(0, margin.bottom - (overflow - top_reduction))
-    outer_height = 3
-  end
-  local available_width = math.max(2, columns - margin.left - margin.right)
-  gap = math.min(gap, math.max(0, available_width - 2))
-  local left_width = math.max(1, math.floor((available_width - gap) / 2))
-  local right_width = math.max(1, available_width - gap - left_width)
-  return {
-    columns = columns,
-    lines = lines,
-    top = top,
-    bottom = bottom,
-    row = top + margin.top + 1,
-    left_col = margin.left,
-    right_col = margin.left + left_width + gap,
-    left_width = left_width,
-    right_width = right_width,
-    height = outer_height - 2,
-    gap = gap,
-    available_width = left_width + gap + right_width,
-  }
+  local configured = ui.layout_config()
+  local windows = options.windows or {}
+  return geometry.surface(columns, lines, {
+    margin = windows.margin or configured.margin,
+    gap = windows.gap or configured.gap,
+  })
 end
 
 function M.workspace_widths(weights, columns)
-  weights = weights or { 1 }
-  columns = math.max(1, math.floor(columns or vim.o.columns or 1))
-  local pane_count = math.max(1, #weights)
-  local available = math.max(pane_count * 8, columns - math.max(0, pane_count - 1))
-  local total_weight = 0
-  for _, weight in ipairs(weights) do
-    total_weight = total_weight + math.max(0.01, tonumber(weight) or 1)
-  end
-  local widths = {}
-  local assigned = 0
-  for index, weight in ipairs(weights) do
-    local width = index == pane_count
-      and available - assigned
-      or math.floor(available * math.max(0.01, tonumber(weight) or 1) / total_weight)
-    width = math.max(8, width)
-    widths[index] = width
-    assigned = assigned + width
-  end
-  return widths
+  return geometry.workspace_widths(weights, columns)
 end
 
 function M.validate_surface(surface, expected)
