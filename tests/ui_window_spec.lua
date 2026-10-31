@@ -47,4 +47,16 @@ return function(test)
   window_module.set_status_segments(previous)
   vim.api.nvim_win_close(status_window, true)
   vim.api.nvim_buf_delete(status_buffer, { force = true })
+
+  local render_buffer = ui.buffer("proud://test/render-offset")
+  local view = { lines = { "abc", "line\nbreak" }, highlights = { 1, 0, 4, "ProudMuted" }, highlight_format = "flat" }
+  ui.render(render_buffer, view, { top_pad = 2 })
+  test.eq(4, vim.api.nvim_buf_line_count(render_buffer), "top_pad adds blank rows")
+  test.eq("   ", vim.api.nvim_buf_get_lines(render_buffer, 0, 1, false)[1], "pad rows match the first line width")
+  test.eq("line break", vim.api.nvim_buf_get_lines(render_buffer, 3, 4, false)[1], "newlines become spaces")
+  test.eq(1, view.highlights[1], "rendering with top_pad does not modify the view")
+  local marks = vim.api.nvim_buf_get_extmarks(render_buffer, -1, 0, -1, { details = true })
+  test.eq(1, #marks, "one highlight is placed")
+  test.eq(3, marks[1][2], "highlight rows are offset by top_pad")
+  vim.api.nvim_buf_delete(render_buffer, { force = true })
 end

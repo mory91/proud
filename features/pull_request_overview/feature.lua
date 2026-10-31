@@ -36,14 +36,6 @@ local function normalized_files(pull)
   return files
 end
 
-local function find_line(lines, needle)
-  for index, line in ipairs(lines) do
-    if line:find(needle, 1, true) then
-      return index - 1
-    end
-  end
-end
-
 local function body_lines(body)
   if type(body) == "string" then
     return vim.split(body, "\n", { plain = true })
@@ -62,35 +54,6 @@ local function separator_line(label, width)
     return ui.fit(prefix, width)
   end
   return prefix .. string.rep("─", width - prefix_width)
-end
-
-local function content_lines(value, width, padding)
-  return ui.content_lines(value, {
-    width = width,
-    padding = padding or horizontal_padding,
-  })
-end
-
-local function content_line(value, width, padding)
-  local lines = content_lines(value, width, padding)
-  return lines[1] or ""
-end
-
-local function content_spans(lines, highlights, value, start_line, group, needle, whole_line)
-  local offset = 0
-  for _, source in ipairs(vim.split(tostring(value or ""), "\n", { plain = true })) do
-    if source ~= "" then
-      local found = ui.view.span(lines, highlights, start_line + offset, needle or source, group)
-      if not found and whole_line then
-        local rendered = lines[start_line + offset + 1] or ""
-        local text = rendered
-          :sub(horizontal_padding + 1, math.max(horizontal_padding, #rendered - horizontal_padding))
-          :gsub("%s+$", "")
-        ui.view.span(lines, highlights, start_line + offset, text, group)
-      end
-    end
-    offset = offset + 1
-  end
 end
 
 local function conversation_threads(pull)
@@ -307,113 +270,77 @@ function M.render(state, width)
   width = math.max(36, math.floor(width or 80))
   local inner_width = math.max(1, width - horizontal_padding * 2)
   local pull = state.pull
-  local reviewer_values = pull.reviewers or {}
+  local box = { width = width, padding = horizontal_padding }
+  local v = ui.view.new()
+  local function line(...)
+    return v:wrapped({ ... }, box)
+  end
+
   local review_summary = {}
-  for _, reviewer in ipairs(reviewer_values) do
+  for _, reviewer in ipairs(pull.reviewers or {}) do
     local state_label = reviewer_state_labels[reviewer.state] or reviewer.state or "review pending"
     table.insert(review_summary, tostring(reviewer.login or reviewer.name or "unknown") .. " " .. state_label)
   end
-  local title = pull.title .. "  #" .. tostring(pull.number)
-  local summary = "● " .. (pull.state or "Open") .. "    " .. (pull.author or "unknown")
-  local merge = "  wants to merge into " .. (pull.base_ref or "main") .. " from " .. (pull.head_ref or "")
-  local reviewers = "Reviewers  " .. (#review_summary > 0 and table.concat(review_summary, "   ") or "none")
-  local labels = "Labels     " .. (#(pull.labels or {}) > 0 and table.concat(pull.labels, " · ") or "none")
-  local milestone = "Milestone  " .. (pull.milestone or "none")
-  local title_lines = content_lines(title, width, horizontal_padding)
-  local summary_lines = content_lines(summary, width, horizontal_padding)
-  local merge_lines = content_lines(merge, width, horizontal_padding)
-  local reviewer_lines = content_lines(reviewers, width, horizontal_padding)
-  local label_lines = content_lines(labels, width, horizontal_padding)
-  local milestone_lines = content_lines(milestone, width, horizontal_padding)
-  local lines = {}
-  for _, group in ipairs({ title_lines, summary_lines, merge_lines, reviewer_lines, label_lines, milestone_lines }) do
-    vim.list_extend(lines, group)
-  end
-  table.insert(lines, content_line("", width, horizontal_padding))
-  table.insert(lines, content_line(separator_line("Description", inner_width), width, horizontal_padding))
-  local body_start = #lines
-  for _, line in ipairs(state.body) do
-    vim.list_extend(lines, content_lines(line, width, horizontal_padding))
-  end
-  if state.loading and #state.body == 0 then
-    table.insert(lines, content_line("Loading pull request details...", width, horizontal_padding))
-  end
-  table.insert(lines, content_line("", width, horizontal_padding))
+  local label_text = table.concat(pull.labels or {}, " · ")
 
-  local highlights = {}
-  local summary_start = #title_lines
-  local merge_start = summary_start + #summary_lines
-  local reviewer_start = merge_start + #merge_lines
-  local label_start = reviewer_start + #reviewer_lines
-  local milestone_start = label_start + #label_lines
-  content_spans(lines, highlights, pull.title, 0, "ProudBright", pull.title, true)
-  ui.view.span(lines, highlights, 0, "#" .. tostring(pull.number), "ProudAccentText")
-  content_spans(lines, highlights, pull.state or "Open", summary_start, "ProudSuccessText", pull.state or "Open")
-  content_spans(lines, highlights, pull.author or "unknown", summary_start, "ProudAccentText", pull.author or "unknown")
-  content_spans(lines, highlights, pull.base_ref or "main", merge_start, "ProudAccentText", pull.base_ref or "main")
-  content_spans(lines, highlights, pull.head_ref or "", merge_start, "ProudAccentText", pull.head_ref or "")
-  content_spans(lines, highlights, "Reviewers", reviewer_start, "ProudMuted", "Reviewers")
-  content_spans(lines, highlights, "Labels", label_start, "ProudMuted", "Labels")
-  content_spans(lines, highlights, table.concat(pull.labels or {}, " · "), label_start, "ProudAccentText", table.concat(pull.labels or {}, " · "))
-  content_spans(lines, highlights, "Milestone", milestone_start, "ProudMuted", "Milestone")
-  content_spans(lines, highlights, separator_line("Description", inner_width), milestone_start + #milestone_lines + 1, "ProudMuted", separator_line("Description", inner_width))
-  local body_line = body_start
+  line({ pull.title, "ProudBright" }, "  ", { "#" .. tostring(pull.number), "ProudAccentText" })
+  line(
+    "● ", { pull.state or "Open", "ProudSuccessText" }, "    ",
+    { pull.author or "unknown", "ProudAccentText" }
+  )
+  line(
+    "  wants to merge into ", { pull.base_ref or "main", "ProudAccentText" },
+    " from ", { pull.head_ref or "", "ProudAccentText" }
+  )
+  line({ "Reviewers", "ProudMuted" }, "  " .. (#review_summary > 0 and table.concat(review_summary, "   ") or "none"))
+  line({ "Labels", "ProudMuted" }, "     ", label_text ~= "" and { label_text, "ProudAccentText" } or "none")
+  line({ "Milestone", "ProudMuted" }, "  " .. (pull.milestone or "none"))
+  line("")
+  line({ separator_line("Description", inner_width), "ProudMuted" })
   for _, source in ipairs(state.body) do
-    local wrapped = content_lines(source, width, horizontal_padding)
-    for _, line in ipairs(wrapped) do
-      local text = line
-        :sub(horizontal_padding + 1, math.max(horizontal_padding, #line - horizontal_padding))
-        :gsub("%s+$", "")
-      if source:match("^## ") then
-        ui.view.span(lines, highlights, body_line, text, "ProudAccentText")
-      elseif source:match("^%- %[x%]") then
-        ui.view.span(lines, highlights, body_line, "- [x]", "ProudSuccessText")
-      elseif source:match("^%- %[ %]") then
-        ui.view.span(lines, highlights, body_line, "- [ ]", "ProudWarning")
-      end
-      body_line = body_line + 1
+    if source:match("^## ") then
+      line({ source, "ProudAccentText" })
+    elseif source:match("^%- %[x%]") then
+      line({ "- [x]", "ProudSuccessText" }, source:sub(6))
+    elseif source:match("^%- %[ %]") then
+      line({ "- [ ]", "ProudWarning" }, source:sub(6))
+    else
+      line(source)
     end
   end
+  if state.loading and #state.body == 0 then
+    line("Loading pull request details...")
+  end
+  line("")
 
   local card_items, conversation_count = conversation_items(pull)
-  table.insert(lines, content_line(separator_line("Conversation " .. conversation_count, inner_width), width, horizontal_padding))
-  local conversation_row = #lines - 1
-  ui.view.span(lines, highlights, conversation_row, lines[conversation_row + 1], "ProudMuted")
-
+  line({ separator_line("Conversation " .. conversation_count, inner_width), "ProudMuted" })
   local conversation_cards = require("proud.loader").load("conversation_cards")
   if #card_items == 0 then
-    table.insert(lines, content_line("No conversation yet", width, horizontal_padding))
-    ui.view.span(lines, highlights, #lines - 1, "No conversation yet", "ProudMuted")
+    line({ "No conversation yet", "ProudMuted" })
     state.conversation_cards = {}
   else
-    table.insert(lines, content_line("", width, horizontal_padding))
+    line("")
     local specs = conversation_cards.layout(card_items, {
       width = math.max(12, width - horizontal_padding * 2 - 2),
       margin = 0,
       min_width = 12,
       col_offset = horizontal_padding,
-      start_row = #lines + 1,
+      start_row = v:row() + 1,
       gap = 1,
     })
     for _ = 1, specs.total_rows do
-      table.insert(lines, content_line("", width, horizontal_padding))
+      line("")
     end
     state.conversation_cards = specs
   end
-  table.insert(lines, content_line("", width, horizontal_padding))
-  table.insert(lines, content_line("Comment  draft", width, horizontal_padding))
+  line("")
+  line({ "Comment", "ProudMuted" }, "  ", { "draft", "ProudAccentText" })
 
-  local comment_row = find_line(lines, "Comment  draft")
-  if comment_row then
-    ui.view.span(lines, highlights, comment_row, "Comment", "ProudMuted")
-    ui.view.span(lines, highlights, comment_row, "draft", "ProudAccentText")
-  end
-  return {
-    lines = lines,
-    highlights = highlights,
-    conversation_cards = state.conversation_cards,
-    padding = horizontal_padding,
-  }
+  local view = v:build()
+  view.conversation_cards = state.conversation_cards
+  view.padding = horizontal_padding
+  return view
 end
 
 function M.render_panes(state, options)

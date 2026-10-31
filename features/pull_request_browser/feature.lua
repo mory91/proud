@@ -424,12 +424,21 @@ function M.render_list(state, options)
   end
 
   add("")
-  add("Select a pull request to open its review overview.")
-  add("Visible " .. #state.filtered .. "  ·  Source " .. state.source)
-  ui.view.span(lines, highlights, #lines - 2, "Select a pull request", "ProudAccentText", "flat")
-  ui.view.span(lines, highlights, #lines - 2, "review overview", "ProudSuccessText", "flat")
-  ui.view.span(lines, highlights, #lines - 1, "Visible", "ProudMuted", "flat")
-  ui.view.span(lines, highlights, #lines - 1, "Source", "ProudMuted", "flat")
+  -- Footer columns are computed from the text, like the rows above.
+  local function mark(row, start_col, text, group)
+    local line = lines[row + 1]
+    if start_col < #line then
+      push_flat(highlights, row, start_col, math.min(start_col + #text, #line), group)
+    end
+  end
+  local open_prefix, open_target = "Select a pull request", "review overview"
+  add(open_prefix .. " to open its " .. open_target .. ".")
+  mark(#lines - 1, 0, open_prefix, "ProudAccentText")
+  mark(#lines - 1, #open_prefix + #" to open its ", open_target, "ProudSuccessText")
+  local visible = "Visible " .. #state.filtered .. "  ·  "
+  add(visible .. "Source " .. state.source)
+  mark(#lines - 1, 0, "Visible", "ProudMuted")
+  mark(#lines - 1, #visible, "Source", "ProudMuted")
   return { lines = lines, highlights = highlights, highlight_format = "flat" }
 end
 
@@ -437,88 +446,69 @@ function M.render_preview(state, options)
   options = options or {}
   local width = math.max(10, math.floor(options.width or select(2, layout_widths(vim.o.columns))))
   local selected = M.selected(state)
-  local lines = {}
-  local description = {}
-  local function add(value)
-    table.insert(lines, fit(value, width))
+  local v = ui.view.new({ width = width })
+  if not selected then
+    v:line({ "No pull request selected", "ProudMuted" })
+    return v:build()
   end
-  if selected then
-    local reviewer_values = reviewers(selected)
-    local label_values = labels(selected)
-    add("#" .. safe_text(selected.number, "0") .. " " .. safe_text(selected.title, "Untitled pull request"))
-    add("● " .. safe_text(selected.state, selected.is_draft and "Draft" or "Open") .. "    " .. pull_author(selected) .. " wants to merge")
-    add("  " .. safe_text(selected.head_ref, "") .. " into " .. safe_text(selected.base_ref, "main"))
-    add(("  +%d  -%d  · ◆%d  · %s"):format(
-      safe_number(selected.additions, 0),
-      safe_number(selected.deletions, 0),
-      safe_number(selected.threads, 0),
-      safe_text(selected.age, "now")
-    ))
-    if #reviewer_values == 0 then
-      add("Reviewers  none")
-    else
-      for index, reviewer in ipairs(reviewer_values) do
-        local prefix = index == 1 and "Reviewers  " or "           "
-        add(prefix .. reviewer.login .. " " .. (reviewer_state_labels[reviewer.state] or reviewer.state))
-      end
-    end
-    add("Labels     " .. (#label_values > 0 and table.concat(label_values, " · ") or "none"))
-    add("")
-    description = body_lines(selected.body)
-    if not selected.description_loaded then
-      description = {
-        selected.description_error and "Could not load description." or "Loading description...",
-      }
-    elseif #description == 0 then
-      table.insert(description, "No description provided.")
-    end
-    for _, line in ipairs(description) do
-      add(line)
-    end
+  local state_label = safe_text(selected.state, selected.is_draft and "Draft" or "Open")
+  v:line(
+    { "#" .. safe_text(selected.number, "0"), "ProudAccentText" }, " ",
+    { safe_text(selected.title, "Untitled pull request"), "ProudBright" }
+  )
+  v:line(
+    { "● " .. state_label, status_highlight(selected) }, "    ",
+    { pull_author(selected), "ProudAccentText" }, " wants to merge"
+  )
+  v:line(
+    "  ", { safe_text(selected.head_ref, ""), "ProudAccentText" },
+    " into ", { safe_text(selected.base_ref, "main"), "ProudAccentText" }
+  )
+  v:line(
+    "  ", { "+" .. tostring(safe_number(selected.additions, 0)), "ProudSuccessText" },
+    "  ", { "-" .. tostring(safe_number(selected.deletions, 0)), "ProudDangerText" },
+    "  · ", { "◆" .. tostring(safe_number(selected.threads, 0)), "ProudWarning" },
+    "  · ", { safe_text(selected.age, "now"), "ProudMuted" }
+  )
+  local reviewer_values = reviewers(selected)
+  if #reviewer_values == 0 then
+    v:line({ "Reviewers", "ProudMuted" }, "  none")
   else
-    add("No pull request selected")
-  end
-  local highlights = {}
-  if selected then
-    ui.view.span(lines, highlights, 0, "#" .. safe_text(selected.number, "0"), "ProudAccentText", "tuple")
-    ui.view.span(lines, highlights, 0, safe_text(selected.title, "Untitled pull request"), "ProudBright", "tuple")
-    local state_label = safe_text(selected.state, selected.is_draft and "Draft" or "Open")
-    ui.view.span(lines, highlights, 1, "● " .. state_label, status_highlight(selected), "tuple")
-    ui.view.span(lines, highlights, 1, pull_author(selected), "ProudAccentText", "tuple")
-    ui.view.span(lines, highlights, 2, safe_text(selected.head_ref, ""), "ProudAccentText", "tuple")
-    ui.view.span(lines, highlights, 2, safe_text(selected.base_ref, "main"), "ProudAccentText", "tuple")
-    ui.view.span(lines, highlights, 3, "+" .. tostring(safe_number(selected.additions, 0)), "ProudSuccessText", "tuple")
-    ui.view.span(lines, highlights, 3, "-" .. tostring(safe_number(selected.deletions, 0)), "ProudDangerText", "tuple")
-    ui.view.span(lines, highlights, 3, "◆" .. tostring(safe_number(selected.threads, 0)), "ProudWarning", "tuple")
-    ui.view.span(lines, highlights, 3, safe_text(selected.age, "now"), "ProudMuted", "tuple")
-    local reviewer_values = reviewers(selected)
     for index, reviewer in ipairs(reviewer_values) do
-      local row = 3 + index
-      if index == 1 then
-        ui.view.span(lines, highlights, row, "Reviewers", "ProudMuted", "tuple")
-      end
-      ui.view.span(lines, highlights, row, reviewer.login, "ProudAccentText", "tuple")
       local label = reviewer_state_labels[reviewer.state] or reviewer.state
-      ui.view.span(lines, highlights, row, label, reviewer_state_highlights[reviewer.state] or "ProudAccentText", "tuple")
+      v:line(
+        index == 1 and { "Reviewers", "ProudMuted" } or "         ", "  ",
+        { reviewer.login, "ProudAccentText" }, " ",
+        { label, reviewer_state_highlights[reviewer.state] or "ProudAccentText" }
+      )
     end
-    local labels_row = 4 + math.max(#reviewer_values, 1)
-    ui.view.span(lines, highlights, labels_row, "Labels", "ProudMuted", "tuple")
-    local label_text = table.concat(labels(selected), " · ")
-    ui.view.span(lines, highlights, labels_row, label_text ~= "" and label_text or "none", "ProudAccentText", "tuple")
-    for index, line in ipairs(description) do
-      local row = labels_row + 1 + index
-      if line:match("^#+%s+") then
-        ui.view.span(lines, highlights, row, line, "ProudAccentText", "tuple")
-      elseif line:match("^%- %[x%]") then
-        ui.view.span(lines, highlights, row, "- [x]", "ProudSuccessText", "tuple")
-      elseif line:match("^%- %[ %]") then
-        ui.view.span(lines, highlights, row, "- [ ]", "ProudWarning", "tuple")
-      end
-    end
-  else
-    ui.view.span(lines, highlights, 0, "No pull request selected", "ProudMuted", "tuple")
   end
-  return { lines = lines, highlights = highlights }
+  local label_values = labels(selected)
+  v:line(
+    { "Labels", "ProudMuted" }, "     ",
+    { #label_values > 0 and table.concat(label_values, " · ") or "none", "ProudAccentText" }
+  )
+  v:blank()
+  local description = body_lines(selected.body)
+  if not selected.description_loaded then
+    description = {
+      selected.description_error and "Could not load description." or "Loading description...",
+    }
+  elseif #description == 0 then
+    description = { "No description provided." }
+  end
+  for _, line in ipairs(description) do
+    if line:match("^#+%s+") then
+      v:line({ line, "ProudAccentText" })
+    elseif line:match("^%- %[x%]") then
+      v:line({ "- [x]", "ProudSuccessText" }, line:sub(6))
+    elseif line:match("^%- %[ %]") then
+      v:line({ "- [ ]", "ProudWarning" }, line:sub(6))
+    else
+      v:line(line)
+    end
+  end
+  return v:build()
 end
 
 function M.attach(buffer, state, options)

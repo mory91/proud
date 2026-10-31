@@ -58,110 +58,82 @@ function M.toggle_mode(state)
   state.mode = state.mode == "three-dot" and "two-dot" or "three-dot"
 end
 
-function M.render(state)
-  local lines = {}
-  local highlights = {}
+local function status_group(status)
+  return status == "A" and "ProudSuccessText"
+    or status == "D" and "ProudDangerText"
+    or "ProudAccentText"
+end
+
+-- Byte padding, matching string.format's %-Ns columns.
+local function pad(value, width)
+  return string.rep(" ", math.max(0, width - #value))
+end
+
+local function render_header(v, state)
+  v:line({ "Compare", "ProudAccentText" }, "  ", { state.mode, "ProudAccentText" }, ", from merge base")
+  v:line(
+    { "base", "ProudMuted" }, "  ", { state.base, "ProudAccentText" }, pad(state.base, 28),
+    " ", { "head", "ProudMuted" }, "  ", { state.head, "ProudSuccessText" }
+  )
+  v:line(
+    "↑" .. state.ahead .. " ", { "ahead", "ProudSuccessText" },
+    "  · ↓" .. state.behind .. " ", { "behind", "ProudWarning" },
+    "  · " .. state.notes .. " ", { "local notes", "ProudMuted" }
+  )
+  v:blank()
+end
+
+local function render_changes(v, state)
   local additions, deletions = totals(state.files)
-  table.insert(lines, "Compare  " .. state.mode .. ", from merge base")
-  table.insert(lines, ("base  %-28s head  %s"):format(state.base, state.head))
-  table.insert(lines, ("↑%d ahead  · ↓%d behind  · %s"):format(state.ahead, state.behind, state.notes .. " local notes"))
-  table.insert(lines, "")
-  table.insert(lines, "Commits  " .. #state.commits)
+  v:line({ "Commits", "ProudAccentText" }, "  " .. #state.commits)
   if state.loading then
-    table.insert(lines, "Loading comparison...")
+    v:line("Loading comparison...")
   end
   for _, commit in ipairs(state.commits) do
-    table.insert(lines, ("%s  %s"):format(commit.sha or "", commit.message or ""))
-    ui.view.span(lines, highlights, #lines - 1, commit.sha or "", "ProudAccentText")
+    v:line({ commit.sha or "", "ProudAccentText" }, "  " .. (commit.message or ""))
   end
-  table.insert(lines, "")
-  table.insert(lines, ("Files  %d  +%d  -%d"):format(#state.files, additions, deletions))
+  v:blank()
+  v:line({ "Files", "ProudAccentText" }, ("  %d  +%d  -%d"):format(#state.files, additions, deletions))
   for file_index, file in ipairs(state.files) do
-    table.insert(lines, ("%s %-36s +%d -%d%s"):format(
-      file.status or "M",
-      file.path,
-      file.additions or 0,
-      file.deletions or 0,
-      file.notes and file.notes > 0 and (" ◇" .. file.notes) or ""
-    ))
-    local line = #lines - 1
+    local status = file.status or "M"
+    local added = "+" .. tostring(file.additions or 0)
+    local deleted = "-" .. tostring(file.deletions or 0)
+    local notes = file.notes and file.notes > 0 and ("◇" .. file.notes) or nil
     if file_index == 1 then
-      ui.view.span(lines, highlights, line, file.status or "M", "ProudAccentText")
-      ui.view.span(lines, highlights, line, file.path, "ProudBright")
-      ui.view.span(lines, highlights, line, "+" .. tostring(file.additions or 0), "ProudSuccessText")
-      ui.view.span(lines, highlights, line, "-" .. tostring(file.deletions or 0), "ProudDangerText")
-      if file.notes and file.notes > 0 then
-        ui.view.span(lines, highlights, line, "◇" .. tostring(file.notes), "ProudWarning")
-      end
+      v:line(
+        { status, "ProudAccentText" }, " ", { file.path, "ProudBright" }, pad(file.path, 36),
+        " ", { added, "ProudSuccessText" }, " ", { deleted, "ProudDangerText" },
+        notes and " " or nil, notes and { notes, "ProudWarning" } or nil
+      )
     else
-      local status_group = file.status == "A" and "ProudSuccessText"
-        or file.status == "D" and "ProudDangerText"
-        or "ProudAccentText"
-      table.insert(highlights, {
-        line = line,
-        start_col = 0,
-        end_col = #lines[#lines],
-        group = status_group,
-      })
+      local row = v:line(("%s %-36s %s %s%s"):format(status, file.path, added, deleted, notes and (" " .. notes) or ""))
+      v:mark(row, 0, #v.lines[row + 1], status_group(file.status))
     end
   end
-  table.insert(lines, "")
-  table.insert(lines, "Open a pull request or inspect this local branch comparison.")
-  table.insert(lines, state.notes .. " local note stays local until you open a PR")
-  ui.view.span(lines, highlights, 0, "Compare", "ProudAccentText")
-  ui.view.span(lines, highlights, 0, state.mode, "ProudAccentText")
-  ui.view.span(lines, highlights, 1, "base", "ProudMuted")
-  ui.view.span(lines, highlights, 1, state.base, "ProudAccentText")
-  ui.view.span(lines, highlights, 1, "head", "ProudMuted")
-  ui.view.span(lines, highlights, 1, state.head, "ProudSuccessText")
-  ui.view.span(lines, highlights, 2, "ahead", "ProudSuccessText")
-  ui.view.span(lines, highlights, 2, "behind", "ProudWarning")
-  ui.view.span(lines, highlights, 2, "local notes", "ProudMuted")
-  ui.view.span(lines, highlights, 4, "Commits", "ProudAccentText")
-  ui.view.span(lines, highlights, 6 + #state.commits, "Files", "ProudAccentText")
-  ui.view.span(lines, highlights, #lines - 2, "Open a pull request", "ProudAccentText")
-  ui.view.span(lines, highlights, #lines - 2, "local branch comparison", "ProudSuccessText")
-  ui.view.span(lines, highlights, #lines - 1, "local note", "ProudMuted")
-  return { lines = lines, highlights = highlights }
+end
+
+local function render_footer(v, state)
+  v:blank()
+  v:line({ "Open a pull request", "ProudAccentText" }, " or inspect this ", { "local branch comparison", "ProudSuccessText" }, ".")
+  v:line(state.notes .. " ", { "local note", "ProudMuted" }, " stays local until you open a PR")
+end
+
+function M.render(state)
+  local v = ui.view.new()
+  render_header(v, state)
+  render_changes(v, state)
+  render_footer(v, state)
+  return v:build()
 end
 
 function M.render_panes(state)
-  local combined = M.render(state)
-  local function highlights_for(lines, first, last, offset)
-    local values = {}
-    for _, item in ipairs(combined.highlights) do
-      if item.line >= first and item.line <= last then
-        table.insert(values, {
-          line = item.line - offset,
-          start_col = item.start_col,
-          end_col = item.end_col,
-          group = item.group,
-        })
-      end
-    end
-    return values
-  end
-  local summary = {
-    lines = {
-      combined.lines[1],
-      combined.lines[2],
-      combined.lines[3],
-      combined.lines[4],
-      "",
-      combined.lines[#combined.lines - 2],
-      combined.lines[#combined.lines - 1],
-      combined.lines[#combined.lines],
-    },
-    highlights = highlights_for(combined.lines, 0, 2, 0),
-  }
-  ui.view.span(summary.lines, summary.highlights, 6, "Open a pull request", "ProudAccentText")
-  ui.view.span(summary.lines, summary.highlights, 7, "local note", "ProudMuted")
-  local changes = { lines = {}, highlights = {} }
-  for index = 5, #combined.lines - 3 do
-    table.insert(changes.lines, combined.lines[index])
-  end
-  changes.highlights = highlights_for(combined.lines, 4, #combined.lines - 4, 4)
-  return { summary = summary, changes = changes }
+  local summary = ui.view.new()
+  render_header(summary, state)
+  summary:blank()
+  render_footer(summary, state)
+  local changes = ui.view.new()
+  render_changes(changes, state)
+  return { summary = summary:build(), changes = changes:build() }
 end
 
 function M.attach(buffer, state, options)

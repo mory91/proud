@@ -4,15 +4,6 @@ local keymap = require("proud.keymap")
 
 local M = {}
 
-local function pad(value, width, align_right)
-  value = tostring(value or "")
-  if #value >= width then
-    return value:sub(1, width)
-  end
-  local padding = string.rep(" ", width - #value)
-  return align_right and padding .. value or value .. padding
-end
-
 local function thread_index(state)
   local index = {}
   for _, thread in ipairs(state.threads) do
@@ -98,94 +89,97 @@ function M.next_thread(state, delta)
   state.thread_cursor = (state.thread_cursor - 1 + delta) % #state.threads + 1
 end
 
-function M.render_code(state)
-  local lines = {}
-  local highlights = {}
+-- Rule width when no pane width is known (tests, benchmarks).
+local DEFAULT_RULE_WIDTH = 112
+
+-- A separator `width` cells wide whose first `head` cells are muted.
+local function add_rule(v, width, head)
+  width = math.max(1, math.floor(width or DEFAULT_RULE_WIDTH))
+  head = math.min(head, width)
+  v:spans(string.rep("─", head), "ProudMuted", string.rep("─", width - head))
+end
+
+-- Diff rows use spans() and fill(): this renderer is on the diff SLA path
+-- (1,200 rows), so it avoids per-row chunk tables.
+function M.render_code(state, width)
+  local v = ui.view.new()
   local file = state.files[state.file_cursor]
   if not file then
-    return {
-      lines = { state.loading and "Loading diff..." or "No diff available" },
-      highlights = {},
-    }
+    v:spans(state.loading and "Loading diff..." or "No diff available")
+    return v:build()
   end
-  table.insert(lines, ("main → %s"):format(state.pull.head_ref or "feature"))
-  table.insert(lines, ("%s  [+%d -%d]  file %d / %d"):format(file.path, file.additions, file.deletions, state.file_cursor, #state.files))
-  table.insert(lines, string.rep("─", 112))
-  ui.view.span(lines, highlights, 0, "main →", "ProudAccentText")
-  ui.view.span(lines, highlights, 0, state.pull.head_ref or "feature", "ProudAccentText")
-  ui.view.span(lines, highlights, 1, file.path, "ProudBright")
-  ui.view.span(lines, highlights, 1, "+" .. tostring(file.additions), "ProudSuccessText")
-  ui.view.span(lines, highlights, 1, "-" .. tostring(file.deletions), "ProudDangerText")
-  ui.view.span(lines, highlights, 2, string.rep("─", 24), "ProudMuted")
+  v:spans("main →", "ProudAccentText", " ", nil, state.pull.head_ref or "feature", "ProudAccentText")
+  v:spans(
+    file.path, "ProudBright",
+    "  [", nil,
+    "+" .. tostring(file.additions), "ProudSuccessText",
+    " ", nil,
+    "-" .. tostring(file.deletions), "ProudDangerText",
+    ("]  file %d / %d"):format(state.file_cursor, #state.files)
+  )
+  add_rule(v, width, 24)
 
   local index = thread_index(state)
   for _, line in ipairs(diff.file_rows(file, state.sources[file.path])) do
-    if line.kind == "context" or line.kind == "add" or line.kind == "delete" then
-      local sign = line.kind == "add" and "+" or line.kind == "delete" and "-" or " "
+    local kind = line.kind
+    if kind == "context" or kind == "add" or kind == "delete" then
+      local sign = kind == "add" and "+" or kind == "delete" and "-" or " "
       local line_number = line.new_line or line.old_line or 0
       local thread = index[file.path .. ":" .. tostring(line_number)]
-      table.insert(lines, ("%4d %s %s %s"):format(line_number, thread and (thread.resolved and "◇" or "◆") or " ", sign, line.text))
-      if line.kind == "add" then
-        table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #lines[#lines], group = "ProudAdd" })
-      elseif line.kind == "delete" then
-        table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #lines[#lines], group = "ProudDelete" })
+      v:open()
+      if kind == "add" then
+        v:fill("ProudAdd")
+      elseif kind == "delete" then
+        v:fill("ProudDelete")
       end
-      ui.view.span(lines, highlights, #lines - 1, ("%4d "):format(line_number), "ProudMuted")
+      v:add(("%4d "):format(line_number), "ProudMuted")
       if thread then
-        ui.view.span(lines, highlights, #lines - 1, thread.resolved and "◇" or "◆", thread.resolved and "ProudSuccessText" or "ProudWarning")
+        v:add(thread.resolved and "◇" or "◆", thread.resolved and "ProudSuccessText" or "ProudWarning")
+      else
+        v:add(" ")
       end
-    elseif line.kind == "hunk" and not state.sources[file.path] then
-      table.insert(lines, "     " .. line.text)
+      v:add(" " .. sign .. " " .. line.text)
+      v:close()
+    elseif kind == "hunk" and not state.sources[file.path] then
+      v:spans("     " .. line.text)
     end
   end
-  return { lines = lines, highlights = highlights }
+  return v:build()
 end
 
-function M.render_thread(state)
-  local lines = {}
+function M.render_thread(state, width)
+  local v = ui.view.new()
   local current_thread = state.threads[state.thread_cursor]
-  table.insert(lines, "")
+  v:blank()
   if current_thread then
-    table.insert(lines, ("%s  %s:%d  · %s · %d comments"):format(
-      current_thread.resolved and "◇ resolved" or "◆ Thread",
-      vim.fn.fnamemodify(current_thread.path, ":t"),
-      current_thread.line,
-      current_thread.resolved and "resolved" or "unresolved",
-      #current_thread.comments
-    ))
+    local resolved = current_thread.resolved
+    v:spans(
+      resolved and "◇ resolved" or "◆ Thread", resolved and "ProudSuccessText" or "ProudWarning",
+      "  ", nil,
+      vim.fn.fnamemodify(current_thread.path, ":t"), "ProudBright",
+      ":" .. current_thread.line .. "  · ", nil,
+      resolved and "resolved" or "unresolved", resolved and "ProudSuccessText" or "ProudDangerText",
+      (" · %d comments"):format(#current_thread.comments)
+    )
     for _, comment in ipairs(current_thread.comments) do
-      table.insert(lines, comment.author .. "  " .. comment.age)
-      table.insert(lines, "  " .. comment.body)
+      v:spans(comment.author, "ProudAccentText", "  ", nil, comment.age, "ProudMuted")
+      v:spans("  " .. comment.body)
     end
   else
-    table.insert(lines, "No review threads")
+    v:spans("No review threads", "ProudMuted")
   end
-  table.insert(lines, string.rep("─", 112))
-  table.insert(lines, "Reply as you  · markdown  · @ mention")
-  table.insert(lines, state.draft ~= "" and state.draft or "Write a reply...")
-  table.insert(lines, "Draft ready  ·  resolve when the thread is complete")
-  local highlights = {}
-  if current_thread then
-    ui.view.span(lines, highlights, 1, current_thread.resolved and "◇ resolved" or "◆ Thread", current_thread.resolved and "ProudSuccessText" or "ProudWarning")
-    ui.view.span(lines, highlights, 1, vim.fn.fnamemodify(current_thread.path, ":t"), "ProudBright")
-    ui.view.span(lines, highlights, 1, current_thread.resolved and "resolved" or "unresolved", current_thread.resolved and "ProudSuccessText" or "ProudDangerText")
-    local comment_line = 2
-    for _, comment in ipairs(current_thread.comments) do
-      ui.view.span(lines, highlights, comment_line, comment.author, "ProudAccentText")
-      ui.view.span(lines, highlights, comment_line, comment.age, "ProudMuted")
-      comment_line = comment_line + 2
-    end
+  add_rule(v, width, 18)
+  v:spans("Reply as you", "ProudMuted", "  · markdown  · @ mention")
+  if state.draft ~= "" then
+    v:spans(state.draft)
   else
-    ui.view.span(lines, highlights, 1, "No review threads", "ProudMuted")
+    v:spans("Write a reply...", "ProudMuted")
   end
-  ui.view.span(lines, highlights, #lines - 4, string.rep("─", 18), "ProudMuted")
-  ui.view.span(lines, highlights, #lines - 3, "Reply as you", "ProudMuted")
-  ui.view.span(lines, highlights, #lines - 2, "Write a reply...", "ProudMuted")
-  ui.view.span(lines, highlights, #lines - 1, "Draft ready", "ProudAccentText")
-  ui.view.span(lines, highlights, #lines - 1, "resolve", "ProudSuccessText")
-  return { lines = lines, highlights = highlights }
+  v:spans("Draft ready", "ProudAccentText", "  ·  ", nil, "resolve", "ProudSuccessText", " when the thread is complete")
+  return v:build()
 end
 
+-- Code lines followed by thread lines; only the code rows are highlighted.
 function M.render(state)
   local code = M.render_code(state)
   local thread = M.render_thread(state)
@@ -196,40 +190,56 @@ function M.render(state)
   for _, line in ipairs(thread.lines) do
     table.insert(lines, line)
   end
-  return { lines = lines, highlights = code.highlights }
+  return { lines = lines, highlights = code.highlights, highlight_format = code.highlight_format }
+end
+
+-- Byte padding, matching string.format's %-Ns columns.
+local function pad(value, width)
+  return string.rep(" ", math.max(0, width - #value))
 end
 
 function M.render_files(state)
-  local lines = { "Files  " .. #state.files }
-  local highlights = {}
+  local v = ui.view.new()
+  v:spans("Files", "ProudAccentText", "  " .. #state.files)
   for index, file in ipairs(state.files) do
-    local marker = index == state.file_cursor and "▌" or " "
-    table.insert(lines, ("%s%s %-28s +%d -%d"):format(
-      marker,
-      file.status or "M",
-      vim.fn.fnamemodify(file.path, ":t"),
-      file.additions,
-      file.deletions
-    ))
+    local name = vim.fn.fnamemodify(file.path, ":t")
+    v:open()
     if index == state.file_cursor then
-      table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #"▌", group = "ProudAccent" })
+      v:add("▌", "ProudAccent")
+    else
+      v:add(" ")
     end
-    local line = #lines - 1
-    ui.view.span(lines, highlights, line, file.status or "M", "ProudAccentText")
-    ui.view.span(lines, highlights, line, vim.fn.fnamemodify(file.path, ":t"), "ProudBright")
-    ui.view.span(lines, highlights, line, "+" .. tostring(file.additions), "ProudSuccessText")
-    ui.view.span(lines, highlights, line, "-" .. tostring(file.deletions), "ProudDangerText")
+    v:add(file.status or "M", "ProudAccentText")
+      :add(" ")
+      :add(name, "ProudBright")
+      :add(pad(name, 28) .. " ")
+      :add("+" .. tostring(file.additions), "ProudSuccessText")
+      :add(" ")
+      :add("-" .. tostring(file.deletions), "ProudDangerText")
+    v:close()
   end
-  ui.view.span(lines, highlights, 0, "Files", "ProudAccentText")
-  return { lines = lines, highlights = highlights }
+  return v:build()
 end
 
-function M.render_panes(state)
+-- widths: optional { code = n, thread = n } pane widths for the rules.
+function M.render_panes(state, widths)
+  widths = widths or {}
   return {
     files = M.render_files(state),
-    code = M.render_code(state),
-    thread = M.render_thread(state),
+    code = M.render_code(state, widths.code),
+    thread = M.render_thread(state, widths.thread),
   }
+end
+
+local function pane_widths(workspace)
+  local widths = {}
+  for _, name in ipairs({ "code", "thread" }) do
+    local window = ui.workspace_window(workspace, name)
+    if window and vim.api.nvim_win_is_valid(window) then
+      widths[name] = vim.api.nvim_win_get_width(window)
+    end
+  end
+  return widths
 end
 
 function M.attach(buffer, state, options)
@@ -242,7 +252,7 @@ function M.attach(buffer, state, options)
   end
   local function refresh()
     ensure_source()
-    ui.render_workspace(options.workspace, M.render_panes(state))
+    ui.render_workspace(options.workspace, M.render_panes(state, pane_widths(options.workspace)))
   end
   local function select_file(file_cursor)
     if not state.files[file_cursor] then
