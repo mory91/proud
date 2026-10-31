@@ -68,7 +68,7 @@ function M.setup(options)
   M.config = util.deep_merge(M.config, general)
   M.config.keymaps = keymap.setup(keymap_overrides)
   require("proud.ui.theme").set_manage_termguicolors(M.config.ui.termguicolors)
-  require("proud.theme").setup(M.config.ui)
+  require("proud.palette").setup(M.config.ui)
   if M.config.ui.tabline then
     require("proud.ui.tabline").enable()
   else

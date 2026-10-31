@@ -62,7 +62,7 @@ return function(test)
   test.truthy(not invalid_ok, "themes without highlight groups are rejected")
   test.contains(invalid_error, "at least one highlight group")
 
-  local proud_theme = require("proud.theme")
+  local proud_theme = require("proud.palette")
   local presets = {
     "proud-dark",
     "proud-forest",
@@ -121,4 +121,29 @@ return function(test)
 
   proud_theme.setup({ theme = "proud-dark" })
   test.eq("#101828", proud_theme.groups().ProudBackground.bg, "tests restore the default Proud theme")
+
+  local palette = require("proud.palette")
+  palette.setup({
+    theme = "test-plum",
+    themes = {
+      ["test-plum"] = {
+        extends = "proud-dark",
+        palette = { accent = "#9333EA", background = "#000000" },
+        groups = { ProudWarning = { fg = "#FACC15" } },
+      },
+    },
+  })
+  local plum = palette.groups()
+  test.eq("#9333EA", plum.ProudAccent.bg, "palette themes derive the accent fill")
+  test.eq("#000000", plum.ProudCard.bg, "derived card background follows the palette background")
+  test.eq("#000000", plum.ProudCursorHidden.fg, "hidden cursor follows the palette background")
+  test.eq("#EAECF0", plum.ProudText.fg, "unchanged palette fields come from the extended theme")
+  test.eq("#FACC15", plum.ProudWarning.fg, "explicit groups override derived values")
+  local missing_ok, missing_error = pcall(palette.setup, {
+    theme = "test-partial",
+    themes = { ["test-partial"] = { palette = { accent = "#000000" } } },
+  })
+  test.truthy(not missing_ok, "a standalone palette must define every field")
+  test.contains(missing_error, "missing", "missing palette fields are reported")
+  palette.setup({ theme = "proud-dark" })
 end

@@ -78,4 +78,23 @@ ui = {
 }
 ```
 
-`proud.theme` remains Proud's palette adapter: it registers built-ins, resolves `ui.themes`, applies the selected theme, and re-applies it after Neovim `ColorScheme` events.
+`proud.palette` holds Proud's presets: it registers built-ins, resolves `ui.themes`, applies the selected theme, and re-applies it after Neovim `ColorScheme` events.
+
+## Palette Themes
+
+Every built-in is a palette of 20 semantic colors. `proud.palette.derive(palette)` turns a palette into all of Proud's highlight groups, so cards, cursors, tabs and borders always match the background and accent. A custom theme can give a `palette` instead of (or as well as) `groups`. When it extends a palette theme, list only the colors that change:
+
+```lua
+ui = {
+  theme = "plum",
+  themes = {
+    plum = {
+      extends = "proud-dark",
+      palette = { accent = "#9333EA", accent_text = "#D8B4FE" },
+      groups = { ProudWarning = { fg = "#FACC15" } }, -- optional overrides
+    },
+  },
+}
+```
+
+Palette fields: `background`, `panel`, `border`, `text`, `muted`, `bright`, `accent`, `on_accent`, `accent_text`, `selection`, `subtle_border`, `success`, `success_text`, `danger`, `danger_text`, `warning`, `add_fg`, `add_bg`, `delete_fg`, `delete_bg`. A palette theme that does not extend another palette theme must define all of them. Explicit `groups` always win over derived values.

@@ -13,8 +13,8 @@ return function(test)
     },
   })
   test.eq("proud-e2e", require("proud.ui").current_theme(), "Proud setup selects UI framework themes")
-  test.eq("#123456", require("proud.theme").groups().ProudAccent.bg, "Proud setup applies custom theme groups")
-  require("proud.theme").setup({ theme = "proud-dark" })
+  test.eq("#123456", require("proud.palette").groups().ProudAccent.bg, "Proud setup applies custom theme groups")
+  require("proud.palette").setup({ theme = "proud-dark" })
   test.eq(2, vim.fn.exists(":Proud"), "Proud command is registered")
   vim.cmd("Proud demo")
   local buffer = require("proud.session").current.buffer
