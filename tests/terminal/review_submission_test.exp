@@ -1,0 +1,49 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nREVIEW TERMINAL FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern { return }
+    timeout { fail "timed out waiting for $label" }
+    eof { fail "Neovim exited while waiting for $label" }
+  }
+}
+
+proc assert_review {mode label} {
+  set marker [string toupper $mode]
+  send ":lua vim.env.PROUD_REVIEW_MODE='$mode'; dofile(vim.env.PROUD_ROOT..'/tests/terminal/review_assert.lua')\r"
+  wait_for "REVIEW_${marker}_OK=true" $label
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && PROUD_START=demo PROUD_DEMO_SCREEN=review ./scripts/run_proud_test_nvim.sh"
+stty rows 40 columns 120
+wait_for {Review} "review composer"
+assert_review initial "initial review composer"
+
+send "\t"
+sleep 0.2
+assert_review approved "review decision navigation"
+
+send "iLooks good.\033"
+sleep 0.2
+send "S"
+sleep 0.3
+assert_review submitted "review submission"
+
+send "q"
+sleep 0.2
+send ":Proud demo overview\r"
+wait_for {#482 overview} "overview review entry"
+send "R"
+sleep 0.3
+assert_review opened "overview opens review composer"
+
+sleep 0.2
+send ":qa!\r"
+expect eof

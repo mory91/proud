@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Proud</title>
+  <style>
+    :root {
+      --canvas: #f5f4ef;
+      --ink: #1f1e1d;
+      --term: #101828;
+      --panel: #1d2939;
+      --line: #344054;
+      --line-strong: #475467;
+      --text: #eaecf0;
+      --bright: #f9fafb;
+      --muted: #98a2b3;
+      --soft: #d0d5dd;
+      --accent: #7f56d9;
+      --accent-text: #b692f6;
+      --accent-light: #d6bbfb;
+      --success: #dcfae6;
+      --success-strong: #0faea0;
+      --danger: #fee4e2;
+      --danger-strong: #f04438;
+      --warning: #f79009;
+      --add: #0e3131;
+      --del: #381e27;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+    }
+
+    body {
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-height: 58px;
+      padding: 10px 18px;
+      border-bottom: 1px solid #d8d5ce;
+      background: rgba(250, 249, 245, 0.97);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: max-content;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border-radius: 7px;
+      background: var(--accent);
+      color: white;
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .brand strong {
+      font-size: 15px;
+    }
+
+    .brand span {
+      display: block;
+      color: #77736d;
+      font-size: 11px;
+    }
+
+    .screens {
+      display: flex;
+      min-width: 0;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+
+    .screen-button {
+      min-width: max-content;
+      padding: 7px 10px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: #6b6862;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .screen-button:hover {
+      border-color: #c8c4bc;
+      background: white;
+    }
+
+    .screen-button[aria-selected="true"] {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: white;
+    }
+
+    .stage-shell {
+      width: 100%;
+      padding: 22px;
+      overflow: hidden;
+    }
+
+    .viewport {
+      position: relative;
+      width: min(100%, 1440px);
+      aspect-ratio: 1440 / 900;
+      margin: 0 auto;
+      overflow: hidden;
+      border: 1px solid #d5d1c9;
+      border-radius: 8px;
+      background: var(--term);
+      box-shadow: 0 18px 55px rgba(31, 30, 29, 0.16);
+    }
+
+    .term {
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: flex;
+      width: 1440px;
+      height: 900px;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--term);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 20px;
+      transform-origin: top left;
+    }
+
+    .tabline {
+      display: flex;
+      height: 28px;
+      flex: none;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .tab {
+      padding: 4px 16px;
+      border-right: 1px solid var(--line);
+      color: var(--muted);
+      white-space: pre;
+    }
+
+    .tab.on {
+      background: var(--term);
+      box-shadow: inset 0 2px 0 var(--accent);
+      color: var(--bright);
+    }
+
+    .tab.repo {
+      margin-left: auto;
+      border-right: 0;
+      border-left: 1px solid var(--line);
+    }
+
+    .screen {
+      display: none;
+      min-height: 0;
+      flex: 1;
+      flex-direction: column;
+    }
+
+    .screen.active {
+      display: flex;
+    }
+
+    .status {
+      display: flex;
+      height: 24px;
+      flex: none;
+      align-items: center;
+      background: var(--panel);
+      white-space: pre;
+    }
+
+    .mode {
+      padding: 2px 12px;
+      background: var(--accent);
+      color: white;
+      font-weight: 700;
+    }
+
+    .seg {
+      padding: 2px 12px;
+      color: var(--soft);
+    }
+
+    .command {
+      height: 22px;
+      padding: 1px 12px;
+      flex: none;
+      color: var(--soft);
+      white-space: pre;
+    }
+
+    .spacer {
+      flex: 1;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .accent {
+      color: var(--accent-text);
+    }
+
+    .bright {
+      color: var(--bright);
+    }
+
+    .success {
+      color: var(--success);
+    }
+
+    .danger {
+      color: var(--danger);
+    }
+
+    .warning {
+      color: var(--warning);
+    }
+
+    .kbd {
+      color: var(--accent-text);
+    }
+
+    .sources {
+      display: flex;
+      height: 52px;
+      padding: 14px 20px 10px;
+      align-items: center;
+      gap: 8px;
+      white-space: pre;
+    }
+
+    .source-pill {
+      padding: 2px 10px;
+      border-radius: 6px;
+      color: var(--muted);
+    }
+
+    .source-pill.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    .browser-workspace {
+      display: grid;
+      min-height: 0;
+      flex: 1;
+      grid-template-columns: 640px minmax(0, 1fr);
+      gap: 16px;
+      padding: 0 20px 14px;
+    }
+
+    .panel {
+      min-height: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .panel.selected {
+      border-color: var(--accent);
+    }
+
+    .panel-head,
+    .panel-foot {
+      display: flex;
+      min-height: 36px;
+      padding: 8px 12px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      white-space: pre;
+    }
+
+    .panel-foot {
+      border-top: 1px solid var(--line);
+      border-bottom: 0;
+    }
+
+    .pr-list {
+      height: 650px;
+      overflow: hidden;
+      padding: 6px 0;
+    }
+
+    .pr-item {
+      min-height: 52px;
+      padding: 5px 12px;
+      border-left: 3px solid transparent;
+    }
+
+    .pr-item.selected {
+      border-left-color: var(--accent);
+      background: var(--panel);
+    }
+
+    .pr-item .meta,
+    .preview .meta {
+      color: var(--muted);
+    }
+
+    .preview {
+      padding: 12px 16px;
+      overflow: hidden;
+    }
+
+    .preview h1 {
+      margin: 0 0 6px;
+      color: var(--accent-light);
+      font: inherit;
+      font-size: 16px;
+      line-height: 22px;
+    }
+
+    .rule {
+      margin: 12px 0 8px;
+      color: var(--muted);
+      white-space: pre;
+    }
+
+    .overview-workspace {
+      display: grid;
+      min-height: 0;
+      flex: 1;
+      grid-template-columns: 350px minmax(0, 1fr);
+    }
+
+    .file-tree {
+      overflow: hidden;
+      border-right: 1px solid var(--line);
+      background: rgba(29, 41, 57, 0.32);
+    }
+
+    .tree-head {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--accent-text);
+    }
+
+    .tree-section {
+      padding: 10px 16px 2px;
+      color: var(--muted);
+    }
+
+    .tree-item {
+      display: grid;
+      min-height: 28px;
+      padding: 3px 14px 3px 24px;
+      grid-template-columns: 22px minmax(0, 1fr) auto;
+      color: var(--soft);
+    }
+
+    .overview-main {
+      overflow: hidden;
+      padding: 18px 24px;
+    }
+
+    .overview-title {
+      margin: 0 0 4px;
+      color: var(--accent-light);
+      font-size: 17px;
+      line-height: 24px;
+    }
+
+    .overview-meta {
+      margin-bottom: 16px;
+      color: var(--muted);
+      white-space: pre;
+    }
+
+    .check-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px 18px;
+      margin: 10px 0 18px;
+    }
+
+    .check-row {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .conversation {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .note {
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .composer {
+      border-color: var(--accent);
+      background: rgba(127, 86, 217, 0.06);
+    }
+
+    .diff-layout {
+      display: grid;
+      min-height: 0;
+      flex: 1;
+      grid-template-columns: 235px minmax(0, 1fr) 330px;
+    }
+
+    .diff-sidebar {
+      overflow: hidden;
+      border-right: 1px solid var(--line);
+      background: rgba(29, 41, 57, 0.35);
+    }
+
+    .side-block {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .side-title {
+      margin-bottom: 6px;
+      color: var(--accent-text);
+    }
+
+    .side-item {
+      display: flex;
+      min-height: 24px;
+      align-items: center;
+      gap: 6px;
+      color: var(--soft);
+    }
+
+    .diff-main {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .diff-head {
+      display: flex;
+      height: 34px;
+      padding: 0 12px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      white-space: pre;
+    }
+
+    .split-grid {
+      display: grid;
+      flex: 1;
+      grid-template-columns: 52px minmax(0, 1fr) 1px 52px minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .code-column {
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .code-line {
+      display: flex;
+      height: 20px;
+      overflow: hidden;
+      white-space: pre;
+    }
+
+    .line-number {
+      width: 52px;
+      padding-right: 8px;
+      flex: none;
+      text-align: right;
+      color: var(--muted);
+    }
+
+    .code {
+      padding-left: 8px;
+    }
+
+    .divider {
+      background: var(--line);
+    }
+
+    .add {
+      background: var(--add);
+    }
+
+    .add .marker {
+      color: var(--success);
+    }
+
+    .del {
+      background: var(--del);
+    }
+
+    .del .marker {
+      color: var(--danger);
+    }
+
+    .hunk {
+      background: var(--panel);
+      color: var(--accent-text);
+    }
+
+    .thread-panel {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      border-left: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .thread-head {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      color: var(--accent-text);
+    }
+
+    .thread-body {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px;
+      overflow: hidden;
+    }
+
+    .comment {
+      padding-left: 10px;
+      border-left: 2px solid var(--line-strong);
+    }
+
+    .thread-actions {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .keycap {
+      padding: 1px 6px;
+      border: 1px solid var(--line-strong);
+      border-radius: 4px;
+      color: var(--accent-text);
+    }
+
+    .single-layout {
+      display: grid;
+      min-height: 0;
+      flex: 1;
+      grid-template-columns: 230px minmax(0, 1fr) 390px;
+    }
+
+    .reply-panel {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      border-left: 1px solid var(--line);
+    }
+
+    .reply-thread {
+      flex: 1;
+      padding: 12px;
+      overflow: hidden;
+    }
+
+    .reply-box {
+      min-height: 178px;
+      padding: 12px;
+      border-top: 1px solid var(--accent);
+      background: var(--panel);
+    }
+
+    .suggestion {
+      margin: 8px 0;
+      padding: 8px 10px;
+      border-left: 2px solid var(--accent);
+      background: rgba(127, 86, 217, 0.1);
+      color: var(--accent-light);
+    }
+
+    .compare-layout {
+      display: grid;
+      min-height: 0;
+      flex: 1;
+      grid-template-columns: 340px minmax(0, 1fr) 360px;
+    }
+
+    .compare-summary {
+      padding: 18px;
+      border-right: 1px solid var(--line);
+    }
+
+    .compare-pair {
+      display: grid;
+      grid-template-columns: 1fr 28px 1fr;
+      gap: 8px;
+      margin: 14px 0;
+    }
+
+    .branch-box {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .commit-list,
+    .file-list {
+      overflow: hidden;
+    }
+
+    .commit-row,
+    .file-row {
+      display: grid;
+      min-height: 27px;
+      padding: 3px 14px;
+      align-items: center;
+      border-bottom: 1px solid rgba(52, 64, 84, 0.5);
+    }
+
+    .commit-row {
+      grid-template-columns: 76px minmax(0, 1fr);
+    }
+
+    .file-row {
+      grid-template-columns: 24px minmax(0, 1fr) 66px 56px;
+    }
+
+    .branch-picker {
+      padding: 14px;
+      border-left: 1px solid var(--line);
+      background: rgba(29, 41, 57, 0.35);
+    }
+
+    .branch-row {
+      display: grid;
+      min-height: 42px;
+      padding: 6px 8px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .help-base {
+      position: relative;
+      min-height: 0;
+      flex: 1;
+    }
+
+    .dim {
+      position: absolute;
+      inset: 0;
+      background: rgba(16, 24, 40, 0.78);
+    }
+
+    .help-modal {
+      position: absolute;
+      top: 32px;
+      left: 60px;
+      width: 1320px;
+      overflow: hidden;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.6);
+    }
+
+    .help-head {
+      display: flex;
+      padding: 9px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .help-grid {
+      display: grid;
+      padding: 16px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .help-group {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .help-row {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .commands {
+      display: grid;
+      padding: 0 28px 18px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px 24px;
+    }
+
+    @media (max-width: 760px) {
+      .toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .screens {
+        width: 100%;
+      }
+
+      .stage-shell {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand">
+      <div class="brand-mark">P</div>
+      <div>
+        <strong>Proud</strong>
+        <span>Neovim pull request reviewer</span>
+      </div>
+    </div>
+    <nav class="screens" aria-label="Design screens">
+      <button class="screen-button" data-screen="browse" aria-selected="true">1 · Pick a PR</button>
+      <button class="screen-button" data-screen="overview" aria-selected="false">2 · Overview</button>
+      <button class="screen-button" data-screen="single" aria-selected="false">3 · Full-file diff</button>
+      <button class="screen-button" data-screen="compare" aria-selected="false">4 · Compare</button>
+      <button class="screen-button" data-screen="help" aria-selected="false">5 · Keys</button>
+    </nav>
+  </header>
+
+  <main class="stage-shell">
+    <div class="viewport" id="viewport">
+      <div class="term" id="term">
+        <div class="tabline">
+          <div class="tab on">proud: pull requests</div>
+          <div class="tab">#482 overview</div>
+          <div class="tab">#482 diff · full file</div>
+          <div class="tab repo">BrowseAI-Official/BrowseAI</div>
+        </div>
+
+        <section class="screen active" data-screen-panel="browse">
+          <div class="sources">
+            <span class="muted">Source</span>
+            <span class="source-pill">Review requested 3</span>
+            <span class="source-pill">Mine 2</span>
+            <span class="source-pill active">All open 14</span>
+            <span class="source-pill">Recently viewed</span>
+            <span class="source-pill">Branches</span>
+            <span class="spacer"></span>
+            <span class="muted"><span class="kbd">&lt;Tab&gt;</span> next source   <span class="kbd">&lt;C-f&gt;</span> filters</span>
+          </div>
+          <div class="browser-workspace">
+            <div class="panel selected">
+              <div class="panel-head"><span class="accent">PRs ❯</span><span class="bright"> retry is:open</span><span class="spacer"></span><span class="muted">8 / 14</span></div>
+              <div class="pr-list">
+                <div class="pr-item selected"><div><span class="success">●</span> <span class="accent">#482</span> <span class="bright">Add retry backoff to robot task runner</span></div><div class="meta">   sara-k · 2h · <span class="success">+134</span> <span class="danger">−17</span> · 3 threads · <span class="warning">changes requested</span></div></div>
+                <div class="pr-item"><div><span class="success">●</span> <span class="accent">#479</span> <span class="bright">Fix Capture list pagination on infinite scroll</span></div><div class="meta">   dev-lee · 5h · <span class="success">+58</span> <span class="danger">−22</span> · 1 thread · review requested</div></div>
+                <div class="pr-item"><div><span class="success">●</span> <span class="accent">#477</span> <span class="bright">Respect workspace timezone in monitor schedules</span></div><div class="meta">   amir-r · 1d · <span class="success">+201</span> <span class="danger">−40</span> · no threads · review requested</div></div>
+                <div class="pr-item"><div><span class="success">●</span> <span class="accent">#474</span> <span class="bright">Bump Playwright in robot studio</span></div><div class="meta">   renovate · 2d · <span class="success">+12</span> <span class="danger">−12</span> · no threads · <span class="success">approved</span></div></div>
+                <div class="pr-item"><div><span class="success">●</span> <span class="accent">#471</span> <span class="bright">Add Airtable field mapping preview</span></div><div class="meta">   nina-p · 3d · <span class="success">+389</span> <span class="danger">−51</span> · 7 threads · commented</div></div>
+                <div class="pr-item"><div><span class="success">●</span> <span class="accent">#468</span> <span class="bright">Remove legacy task export endpoint</span></div><div class="meta">   morteza · 4d · <span class="success">+0</span> <span class="danger">−312</span> · 2 threads · <span class="success">approved</span></div></div>
+                <div class="pr-item"><div><span class="success">●</span> <span class="accent">#463</span> <span class="bright">Validate origin URL when chaining workflows</span></div><div class="meta">   sara-k · 6d · <span class="success">+77</span> <span class="danger">−9</span> · 1 thread · review requested</div></div>
+                <div class="pr-item"><div><span class="muted">●</span> <span class="accent">#459</span> <span class="bright">Retry webhook delivery on 5xx</span></div><div class="meta">   amir-r · 1w · <span class="success">+46</span> <span class="danger">−5</span> · no threads · draft</div></div>
+              </div>
+              <div class="panel-foot muted"><span class="kbd">&lt;CR&gt;</span> open overview  <span class="kbd">q</span> close</div>
+            </div>
+            <div class="panel">
+              <div class="panel-head muted">Preview</div>
+              <div class="preview">
+                <h1>#482 Add retry backoff to robot task runner</h1>
+                <div><span class="success">● Open</span><span class="muted">   sara-k wants to merge 6 commits into </span><span class="accent">main</span><span class="muted"> from </span><span class="accent">feat/task-retry-backoff</span></div>
+                <div class="muted">5 files   <span class="success">+134</span> <span class="danger">−17</span>   · 6 commits · updated 2h ago</div>
+                <div class="rule">Reviewers  dev-lee requested changes · morteza review pending</div>
+                <div class="rule">Labels     runner · reliability</div>
+                <div><span class="muted">Checks     </span><span class="danger">✗ 4 / 5 passing</span><span class="muted">  (e2e / robot-studio failed)</span></div>
+                <div class="rule">── Summary ─────────────────────────────────────────────────</div>
+                <div>Tasks that hit a transient error used to retry 3 times with a</div>
+                <div>flat 1s wait. This adds exponential backoff with jitter and</div>
+                <div>reads limits from runner config.</div>
+                <div class="rule">── Files ────────────────────────────────────────────────────</div>
+                <div><span class="muted">M </span>packages/runner/src/task/retry.ts <span class="success">+48</span> <span class="danger">−12</span> <span class="warning">◆2</span></div>
+                <div><span class="muted">M </span>packages/runner/src/task/runTask.ts <span class="success">+9</span> <span class="danger">−3</span></div>
+                <div><span class="muted">M </span>packages/runner/src/config.ts <span class="success">+4</span> <span class="danger">−0</span> <span class="warning">◆1</span></div>
+                <div><span class="success">A </span>packages/runner/test/retry.test.ts <span class="success">+61</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="status">
+            <span class="mode">INSERT</span><span class="seg">proud  pull requests</span><span class="seg muted">filter: retry is:open</span><span class="spacer"></span><span class="seg success">api ✓ morteza</span><span class="seg">synced 12s ago</span>
+          </div>
+          <div class="command muted">:Proud prs</div>
+        </section>
+
+        <section class="screen" data-screen-panel="overview">
+          <div class="overview-workspace">
+            <aside class="file-tree">
+              <div class="tree-head">proud   #482 · feat/task-retry-backoff</div>
+              <div class="tree-section">▾ Files  5 · 1 of 5 viewed</div>
+              <div class="tree-item"><span class="warning">M</span><span>retry.ts</span><span class="success">+48</span></div>
+              <div class="tree-item"><span class="warning">M</span><span>runTask.ts</span><span class="success">+9</span></div>
+              <div class="tree-item"><span class="warning">M</span><span>config.ts</span><span class="success">+4</span></div>
+              <div class="tree-item"><span class="success">A</span><span>retry.test.ts</span><span class="success">+61</span></div>
+              <div class="tree-item"><span class="warning">M</span><span>runner.md</span><span class="success">+12</span></div>
+              <div class="tree-section">▾ Commits  6</div>
+              <div class="tree-item"><span class="accent">a3f91c2</span><span>Use config for retry limits</span><span></span></div>
+              <div class="tree-item"><span class="accent">7be0d14</span><span>Add exponential backoff</span><span></span></div>
+              <div class="tree-item"><span class="accent">c21a9fe</span><span>Skip retry on 4xx</span><span></span></div>
+              <div class="tree-section">▾ Checks  4 of 5 passing</div>
+              <div class="tree-item"><span class="success">✓</span><span>lint</span><span class="muted">18s</span></div>
+              <div class="tree-item"><span class="success">✓</span><span>typecheck</span><span class="muted">41s</span></div>
+              <div class="tree-item"><span class="success">✓</span><span>unit / runner</span><span class="muted">1m 12s</span></div>
+              <div class="tree-item"><span class="success">✓</span><span>build</span><span class="muted">2m 03s</span></div>
+              <div class="tree-item"><span class="danger">✗</span><span>e2e / robot-studio</span><span class="muted">6m 40s</span></div>
+            </aside>
+            <article class="overview-main">
+              <h1 class="overview-title">Add retry backoff to robot task runner <span class="muted">#482</span></h1>
+              <div class="overview-meta">● Open   sara-k wants to merge 6 commits into main from feat/task-retry-backoff
+Reviewers  dev-lee ✗ changes requested   morteza ○ pending (you)
+Labels     runner, reliability      Milestone  Q4 runner hardening</div>
+              <div class="rule">── Description ─────────────────────────────────────────────────────────────────────────</div>
+              <div class="accent">## Summary</div>
+              <div>Tasks that hit a transient error (timeouts, 429s, proxy resets) used to retry</div>
+              <div>3 times with a flat 1s wait, which hammers sites that are rate limiting us.</div>
+              <div>This adds exponential backoff with jitter and reads limits from runner config.</div>
+              <br>
+              <div class="accent">## Testing</div>
+              <div><span class="accent">- [x]</span> Unit tests for backoff timing and non-retryable errors</div>
+              <div><span class="accent">- [x]</span> Ran 200 tasks against a robot with a flaky origin URL</div>
+              <div><span class="accent">- [ ]</span> e2e in robot studio</div>
+              <div class="rule">── Conversation  4 ─────────────────────────────────────────────────────────────────────</div>
+              <div class="conversation">
+                <div class="note"><div><span class="bright">dev-lee</span><span class="muted">  reviewed  </span><span class="warning">changes requested</span><span class="muted">  · 1h ago</span></div><div>Backoff math is off by one in retry.ts, see the inline note. We should also</div><div>cap the max delay so a long run of 429s doesn't stall a monitor for minutes.</div><div class="accent">  ↳ 2 inline threads on retry.ts</div></div>
+                <div class="note"><div><span class="bright">sara-k</span><span class="muted">  commented · 40m ago</span></div><div>Good catch. Pushing a fix, cap comes from config.retry.maxDelayMs.</div></div>
+                <div class="note composer"><div><span class="accent">Comment</span><span class="muted">  · markdown · </span><span class="kbd">&lt;C-s&gt;</span><span class="muted"> post · </span><span class="kbd">&lt;Esc&gt;</span><span class="muted"> draft</span></div><div class="muted">Leave a comment on the PR</div></div>
+              </div>
+            </article>
+          </div>
+          <div class="status"><span class="mode">NORMAL</span><span class="seg">#482 overview</span><span class="spacer"></span><span class="seg success">api ✓ morteza</span><span class="seg">review: pending</span></div>
+          <div class="command muted">:Proud open 482</div>
+        </section>
+
+        <section class="screen" data-screen-panel="single">
+          <div class="single-layout">
+            <aside class="diff-sidebar">
+              <div class="side-block"><div class="side-title">Files</div><div class="side-item"><span class="warning">M</span>retry.ts <span class="warning">◆2</span></div><div class="side-item"><span class="warning">M</span>runTask.ts</div><div class="side-item"><span class="warning">M</span>config.ts <span class="warning">◆1</span></div><div class="side-item"><span class="success">A</span>retry.test.ts</div><div class="side-item"><span class="warning">M</span>runner.md</div></div>
+              <div class="side-block muted"><div><span class="kbd">q</span> close</div><div><span class="kbd">]f [f</span> file</div><div><span class="kbd">]t [t</span> thread</div></div>
+            </aside>
+            <div class="diff-main">
+              <div class="diff-head"><span class="accent">main</span><span class="muted"> → </span><span class="success">feat/task-retry-backoff</span><span class="spacer"></span><span class="muted">packages/runner/src/task/retry.ts  [+48 −12]  1 / 5</span></div>
+              <div>
+                <div class="code-line"><div class="line-number">1</div><div class="code">import { sleep } from "./time"</div></div>
+                <div class="code-line"><div class="line-number">2</div><div class="code">import { isRetryable } from "./errors"</div></div>
+                <div class="code-line"><div class="line-number">3</div><div class="code"></div></div>
+                <div class="code-line"><div class="line-number">4</div><div class="code">export interface RetryConfig {</div></div>
+                <div class="code-line"><div class="line-number">5</div><div class="code">  maxAttempts: number</div></div>
+                <div class="code-line"><div class="line-number">6</div><div class="code">  baseDelayMs: number</div></div>
+                <div class="code-line"><div class="line-number">7</div><div class="code">  maxDelayMs: number</div></div>
+                <div class="code-line"><div class="line-number">8</div><div class="code">}</div></div>
+                <div class="code-line"><div class="line-number">9</div><div class="code"></div></div>
+                <div class="code-line"><div class="line-number">10</div><div class="code">export async function withRetry&lt;T&gt;(task: () =&gt; Promise&lt;T&gt;, config: RetryConfig) {</div></div>
+                <div class="code-line"><div class="line-number">11</div><div class="code">  // retry with bounded exponential backoff</div></div>
+                <div class="code-line del"><div class="line-number">12</div><div class="code marker">- for (let attempt = 0; attempt &lt; 3; attempt += 1) {</div></div>
+                <div class="code-line add"><div class="line-number">12</div><div class="code marker">+ for (let attempt = 0; attempt &lt; config.retry.maxAttempts; attempt += 1) {</div></div>
+                <div class="code-line"><div class="line-number">13</div><div class="code">  try {</div></div>
+                <div class="code-line"><div class="line-number">14</div><div class="code">    return await task()</div></div>
+                <div class="code-line"><div class="line-number">15</div><div class="code">  } catch (error) {</div></div>
+                <div class="code-line add"><div class="line-number">16</div><div class="code marker">+   if (!isRetryable(error)) {</div></div>
+                <div class="code-line add"><div class="line-number">17</div><div class="code marker">+     throw error</div></div>
+                <div class="code-line add"><div class="line-number">18</div><div class="code marker">+   }</div></div>
+                <div class="code-line del"><div class="line-number">16</div><div class="code marker">-   await sleep(1000)</div></div>
+                <div class="code-line add"><div class="line-number">19</div><div class="code marker">+   const delay = baseDelayMs * 2 ** (attempt - 1)</div></div>
+                <div class="code-line add"><div class="line-number">20</div><div class="code marker">+   await sleep(Math.min(delay, config.retry.maxDelayMs))</div></div>
+                <div class="code-line"><div class="line-number">21</div><div class="code">  }</div></div>
+                <div class="code-line"><div class="line-number">22</div><div class="code">}</div></div>
+                <div class="code-line"><div class="line-number">23</div><div class="code">throw new Error("retry exhausted")</div></div>
+                <div class="code-line"><div class="line-number">24</div><div class="code">}</div></div>
+              </div>
+            </div>
+            <aside class="reply-panel">
+              <div class="thread-head">◆ retry.ts:14 · unresolved · 2 comments</div>
+              <div class="reply-thread">
+                <div class="comment"><div><span class="bright">dev-lee</span><span class="muted">  1h ago  +1 sara-k</span></div><div>attempt is already incremented here, so the first retry waits 2× base. Intended?</div></div>
+                <br>
+                <div class="comment"><div><span class="bright">sara-k</span><span class="muted">  40m ago · author</span></div><div>Good catch, should be 2 ** (attempt - 1). Fixing in the next push.</div></div>
+              </div>
+              <div class="reply-box">
+                <div class="muted">Reply as morteza · markdown · <span class="kbd">@</span> mention · <span class="kbd">&lt;C-g&gt;</span> suggestion</div>
+                <br>
+                <div>Agreed. While you're in here, can we also cap it?</div>
+                <div class="suggestion">```suggestion<br>const delay = Math.min(baseDelayMs * 2 ** (attempt - 1), maxDelayMs)<br>```</div>
+                <div class="muted"><span class="kbd">&lt;C-s&gt;</span> post reply   <span class="kbd">&lt;C-r&gt;</span> post and resolve   <span class="kbd">&lt;C-p&gt;</span> pending review</div>
+              </div>
+            </aside>
+          </div>
+          <div class="status"><span class="mode">INSERT</span><span class="seg">#482  retry.ts</span><span class="spacer"></span><span class="seg warning">◆ thread 1 / 2</span><span class="seg">review: 1 pending comment</span><span class="seg">14:5</span></div>
+          <div class="command muted">-- INSERT --</div>
+        </section>
+
+        <section class="screen" data-screen-panel="compare">
+          <div class="compare-layout">
+            <aside class="compare-summary">
+              <div class="accent">Compare</div>
+              <div class="muted">three-dot, from merge base</div>
+              <div class="compare-pair">
+                <div class="branch-box"><div class="muted">base</div><div class="bright">main</div><div class="muted">@ 4c0e1aa</div></div>
+                <div class="muted" style="align-self:center;text-align:center">→</div>
+                <div class="branch-box"><div class="muted">head</div><div class="success">feat/monitor-diffs</div><div class="muted">@ 9a7d3f0</div></div>
+              </div>
+              <div><span class="success">↑12 ahead</span><span class="muted"> · </span><span class="danger">↓3 behind</span><span class="muted"> · no PR yet</span></div>
+              <div class="rule">▾ Commits  12</div>
+              <div class="commit-list">
+                <div class="commit-row"><span class="accent">9a7d3f0</span>Track removed rows</div>
+                <div class="commit-row"><span class="accent">52e81bc</span>Index snapshot rows by key</div>
+                <div class="commit-row"><span class="accent">d013a6e</span>Add rowKey helper</div>
+                <div class="commit-row"><span class="accent">7f2c9e4</span>Monitor diff email template</div>
+              </div>
+            </aside>
+            <div>
+              <div class="diff-head"><span class="accent">main</span><span class="muted"> ... </span><span class="success">feat/monitor-diffs</span><span class="spacer"></span><span class="muted">packages/monitor/src/diff.ts  [+22 −4]  1 / 7</span></div>
+              <div class="file-list">
+                <div class="file-row"><span class="warning">M</span><span>monitor/src/diff.ts</span><span class="success">+44 −22</span><span class="warning">◇1</span></div>
+                <div class="file-row"><span class="success">A</span><span>monitor/src/rowKey.ts</span><span class="success">+88</span><span></span></div>
+                <div class="file-row"><span class="warning">M</span><span>monitor/src/notify.ts</span><span class="success">+31 −9</span><span></span></div>
+                <div class="file-row"><span class="success">A</span><span>monitor/templates/diff.mjml</span><span class="success">+121</span><span></span></div>
+                <div class="file-row"><span class="warning">M</span><span>monitor/src/schedule.ts</span><span class="success">+0 −30</span><span></span></div>
+                <div class="file-row"><span class="success">A</span><span>monitor/test/diff.test.ts</span><span class="success">+0</span><span></span></div>
+                <div class="file-row"><span class="warning">M</span><span>docs/monitors.md</span><span class="success">+0</span><span></span></div>
+              </div>
+              <div class="rule">────────────────────────────────────────────────────────────────</div>
+              <div class="code-line add"><div class="line-number">18</div><div class="code marker">+ const rowKey = makeRowKey(snapshot.columns)</div></div>
+              <div class="code-line"><div class="line-number">19</div><div class="code">  return compareRows(previous, current, rowKey)</div></div>
+              <div class="code-line del"><div class="line-number">20</div><div class="code marker">- return compareRows(previous, current)</div></div>
+            </div>
+            <aside class="branch-picker">
+              <div class="accent">Compare ❯ base main ← head mon</div>
+              <div class="muted">4 / 38 branches</div>
+              <div class="branch-row"><div><div class="success">feat/monitor-diffs</div><div class="muted">amir-r  3h</div></div><div><span class="success">↑12</span> <span class="danger">↓3</span><div class="muted">no PR</div></div></div>
+              <div class="branch-row"><div><div class="bright">feat/monitor-timezone</div><div class="muted">amir-r  1d</div></div><div><span class="success">↑4</span> <span class="danger">↓0</span><div class="muted">#477</div></div></div>
+              <div class="branch-row"><div><div class="bright">fix/monitor-email-digest</div><div class="muted">nina-p  5d</div></div><div><span class="success">↑2</span> <span class="danger">↓18</span><div class="muted">no PR</div></div></div>
+              <div class="rule"><span class="kbd">&lt;CR&gt;</span> compare   <span class="kbd">S</span> swap   <span class="kbd">&lt;C-d&gt;</span> two-dot</div>
+              <div class="warning">◇ 1 local note</div>
+            </aside>
+          </div>
+          <div class="status"><span class="mode">NORMAL</span><span class="seg">compare  main...feat/monitor-diffs</span><span class="spacer"></span><span class="seg warning">◇ 1 local note</span><span class="seg">git · local</span></div>
+          <div class="command muted">:Proud compare main feat/monitor-diffs</div>
+        </section>
+
+        <section class="screen" data-screen-panel="help">
+          <div class="help-base">
+            <div class="dim"></div>
+            <div class="help-modal">
+              <div class="help-head"><span class="accent">proud keys</span><span class="muted">&nbsp;&nbsp;buffer-local in proud windows · every key is remappable in setup()</span><span class="spacer"></span><span class="muted"><span class="kbd">?</span> toggle&nbsp;&nbsp;<span class="kbd">q</span> close</span></div>
+              <div class="help-grid">
+                <div class="help-group"><div class="accent">Navigation</div><br><div class="help-row"><span class="kbd">j / k</span><span>next / previous item</span></div><div class="help-row"><span class="kbd">]f / [f</span><span>next / previous file</span></div><div class="help-row"><span class="kbd">]t / [t</span><span>next / previous thread</span></div><div class="help-row"><span class="kbd">&lt;CR&gt;</span><span>open selection</span></div></div>
+                <div class="help-group"><div class="accent">Review</div><br><div class="help-row"><span class="kbd">r</span><span>reply to thread</span></div><div class="help-row"><span class="kbd">R</span><span>resolve or submit</span></div><div class="help-row"><span class="kbd">s</span><span>suggest change</span></div><div class="help-row"><span class="kbd">v</span><span>mark file viewed</span></div></div>
+                <div class="help-group"><div class="accent">Windows</div><br><div class="help-row"><span class="kbd">za</span><span>fold thread</span></div><div class="help-row"><span class="kbd">?</span><span>toggle this help</span></div><div class="help-row"><span class="kbd">q</span><span>close window</span></div></div>
+              </div>
+              <div class="accent" style="padding:0 28px 8px">Commands</div>
+              <div class="commands">
+                <div class="help-row"><span class="accent">:Proud prs</span><span class="muted">list pull requests</span></div>
+                <div class="help-row"><span class="accent">:Proud open {number}</span><span class="muted">description and conversation</span></div>
+                <div class="help-row"><span class="accent">:Proud diff {number}</span><span class="muted">full-file inline diff</span></div>
+                <div class="help-row"><span class="accent">:Proud compare {base} {head}</span><span class="muted">offline local compare</span></div>
+                <div class="help-row"><span class="accent">:Proud help</span><span class="muted">toggle this reference</span></div>
+              </div>
+              <div class="muted" style="padding:0 16px 12px">GitHub auth validates and securely reuses a token; set base_url in setup() for GitHub Enterprise. Branch compare works offline from local git.</div>
+            </div>
+          </div>
+          <div class="status"><span class="mode">NORMAL</span><span class="seg">#482  retry.ts</span><span class="spacer"></span><span class="seg success">api ✓ morteza</span></div>
+          <div class="command muted">:Proud help</div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const viewport = document.getElementById("viewport")
+    const term = document.getElementById("term")
+    const buttons = [...document.querySelectorAll(".screen-button")]
+    const panels = [...document.querySelectorAll("[data-screen-panel]")]
+
+    function scaleTerminal() {
+      const scale = viewport.clientWidth / 1440
+      term.style.transform = `scale(${scale})`
+    }
+
+    function showScreen(name) {
+      buttons.forEach((button) => {
+        button.setAttribute("aria-selected", String(button.dataset.screen === name))
+      })
+      panels.forEach((panel) => {
+        panel.classList.toggle("active", panel.dataset.screenPanel === name)
+      })
+    }
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => showScreen(button.dataset.screen))
+    })
+
+    document.addEventListener("keydown", (event) => {
+      const index = Number(event.key)
+      if (index >= 1 && index <= 6) {
+        showScreen(buttons[index - 1].dataset.screen)
+      }
+    })
+
+    window.addEventListener("resize", scaleTerminal)
+    scaleTerminal()
+  </script>
+</body>
+</html>

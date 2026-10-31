@@ -1,0 +1,33 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nTHREAD COUNT TERMINAL FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern {
+      return
+    }
+    timeout {
+      fail "timed out waiting for $label"
+    }
+    eof {
+      fail "Neovim exited while waiting for $label"
+    }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && PROUD_START=thread-counts-e2e ./scripts/run_proud_test_nvim.sh"
+stty rows 30 columns 100
+
+wait_for {THREAD_COUNTS_TERMINAL_READY=true} "raw API thread-count browser"
+wait_for {3 threads} "three review threads rendered in the terminal"
+wait_for {1 thread} "one review thread rendered in the terminal"
+wait_for {no threads} "zero review threads rendered in the terminal"
+
+send ":qa!\r"
+expect eof

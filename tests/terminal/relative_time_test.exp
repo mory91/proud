@@ -1,0 +1,33 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nRELATIVE TIME TERMINAL FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern {
+      return
+    }
+    timeout {
+      fail "timed out waiting for $label"
+    }
+    eof {
+      fail "Neovim exited while waiting for $label"
+    }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && PROUD_START=relative-time-e2e ./scripts/run_proud_test_nvim.sh"
+stty rows 30 columns 100
+
+wait_for {RELATIVE_TIME_TERMINAL_READY=true} "relative-time PR browser"
+wait_for {24m} "24-minute relative age in the terminal"
+wait_for {1h} "one-hour relative age in the terminal"
+wait_for {1d} "one-day relative age in the terminal"
+
+send ":qa!\r"
+expect eof

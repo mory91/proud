@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+config="$(cat)"
+authorization="$(printf '%s\n' "$config" | sed -n 's/^header = "Authorization: \(.*\)"$/\1/p' | head -n 1)"
+
+case "$config" in
+  *"url = \"http://fixture.local/repos/acme/widget\""*)
+    printf '{"id":17,"full_name":"acme/widget","authorization":"%s"}\n200' "$authorization"
+    ;;
+  *)
+    printf '{"message":"Not Found"}\n404'
+    ;;
+esac

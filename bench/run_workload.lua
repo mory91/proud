@@ -1,0 +1,12 @@
+local root = vim.fn.getcwd()
+vim.opt.runtimepath:prepend(root)
+local harness = dofile(root .. "/bench/harness.lua")
+local feature_name = assert(arg[1], "feature name is required")
+local workload_index = assert(tonumber(arg[2]), "workload index is required")
+local benchmark = assert(loadfile(root .. "/features/" .. feature_name .. "/bench/benchmark.lua"))()
+local workloads = benchmark.workloads or { benchmark }
+local workload = assert(workloads[workload_index], "workload does not exist")
+local stats = harness.measure(workload.options, workload.run)
+local passed = harness.check(stats, workload.sla)
+harness.print(stats)
+os.exit(passed and 0 or 1)

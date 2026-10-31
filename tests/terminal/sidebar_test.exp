@@ -1,0 +1,87 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nSIDEBAR TERMINAL FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern { return }
+    timeout { fail "timed out waiting for $label" }
+    eof { fail "Neovim exited while waiting for $label" }
+  }
+}
+
+proc assert_sidebar {mode label} {
+  set marker [string toupper $mode]
+  send ":lua vim.env.PROUD_SIDEBAR_MODE='$mode'; dofile(vim.env.PROUD_ROOT..'/tests/terminal/sidebar_assert.lua')\r"
+  while 1 {
+    expect {
+      -re "SIDEBAR_${marker}_OK=(true|false)|Press ENTER" {
+        set matched $expect_out(0,string)
+        if {$matched eq "Press ENTER"} {
+          send "\r"
+          exp_continue
+        }
+        if {$matched eq "SIDEBAR_${marker}_OK=true"} {
+          expect -timeout 1 {
+            -re {Press ENTER} { send "\r" }
+            timeout {}
+            eof { fail "Neovim exited while waiting for $label" }
+          }
+          return
+        }
+        fail "$label returned false"
+      }
+      timeout {
+        fail "timed out waiting for $label"
+      }
+      eof {
+        fail "Neovim exited while waiting for $label"
+      }
+    }
+  }
+}
+
+set env(PROUD_TEST_NEXT_ITEM) "J"
+set env(PROUD_TEST_PREVIOUS_ITEM) "K"
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && PROUD_START=demo PROUD_DEMO_SCREEN=overview ./scripts/run_proud_test_nvim.sh"
+stty rows $env(PROUD_TERM_ROWS) columns $env(PROUD_TERM_COLUMNS)
+wait_for {#482 overview} "overview sidebar"
+assert_sidebar initial "initial composable sidebar"
+
+send "j"
+sleep 0.2
+assert_sidebar movedown "j selects the next sidebar entry"
+send "k"
+sleep 0.2
+assert_sidebar moveup "k selects the previous sidebar entry"
+
+send "jjjjjjjj"
+sleep 0.2
+assert_sidebar branch "j reaches the expandable commit branch"
+send {:lua local s=require('proud.session').current.state; s.sidebar.selected_id='files'; local lines=vim.api.nvim_buf_get_lines(0,0,-1,false); for i,line in ipairs(lines) do if line:find('Commits 6',1,true) then vim.api.nvim_win_set_cursor(0,{i,0}); break end end; vim.cmd('doautocmd CursorMoved')}
+send "\r"
+sleep 0.2
+assert_sidebar nativebranch "native cursor movement selects the exact branch"
+send "c"
+sleep 0.2
+assert_sidebar collapsed "c collapses the branch under the cursor"
+send "l"
+sleep 0.2
+assert_sidebar expanded "expanded commit header"
+
+send "gg"
+sleep 0.2
+send "jj"
+sleep 0.2
+send "v"
+sleep 0.2
+assert_sidebar viewed "viewed file state"
+
+sleep 0.2
+send ":qa!\r"
+expect eof

@@ -1,0 +1,68 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nTERMINAL SIZE FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern {
+      return
+    }
+    timeout {
+      fail "timed out waiting for $label"
+    }
+    eof {
+      fail "Neovim exited while waiting for $label"
+    }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && ./scripts/run_proud_test_nvim.sh"
+set rows 45
+set columns 160
+if {[info exists env(PROUD_TERM_ROWS)]} {
+  set rows $env(PROUD_TERM_ROWS)
+}
+if {[info exists env(PROUD_TERM_COLUMNS)]} {
+  set columns $env(PROUD_TERM_COLUMNS)
+}
+stty rows $rows columns $columns
+
+wait_for {proud} "PR browser"
+wait_for {PR} "PR filter header"
+wait_for {retry is:open} "PR filter value"
+send ":lua vim.g.PROUD_EXPECTED_COUNT='3/3'; vim.g.PROUD_COUNT_LABEL='COUNT_OK'; dofile(vim.env.PROUD_ROOT..'/tests/terminal/header_count_assert.lua')\r"
+wait_for {COUNT_OK=true.*3/3} "visible interior PR count"
+send ":lua dofile(vim.env.PROUD_ROOT..'/tests/terminal/browser_layout_assert.lua')\r"
+wait_for {SIZE_OK=true} "rounded two-card browser layout"
+set resized_columns [expr {$columns - 10}]
+set resized_rows [expr {$rows - 3}]
+set resized_width [expr {int(($resized_columns - 2 - 2 - 3) / 2)}]
+set resized_height [expr {$resized_rows - 1 - 2 - 3 - 1 - 1 - 2}]
+set env(PROUD_RESIZE_AFTER) 1
+set env(PROUD_RESIZE_ROWS) $resized_rows
+set env(PROUD_RESIZE_COLUMNS) $resized_columns
+set env(PROUD_RESIZE_DELAY) 0.2
+send ":lua vim.o.columns=$resized_columns; vim.o.lines=$resized_rows; vim.g.PROUD_EXPECTED_COLUMNS=$resized_columns; vim.g.PROUD_EXPECTED_LINES=$resized_rows; vim.g.PROUD_EXPECTED_WIDTH=$resized_width; vim.g.PROUD_EXPECTED_HEIGHT=$resized_height; dofile(vim.env.PROUD_ROOT..'/tests/terminal/resize_assert.lua')\r"
+wait_for {RESIZE_CHANGED_OK=true} "real terminal shrinks rounded surface geometry"
+send ":redraw!\r"
+sleep 0.1
+send ":lua dofile(vim.env.PROUD_ROOT..'/tests/terminal/browser_layout_assert.lua')\r"
+wait_for {SIZE_OK=true} "resized rounded two-card browser layout"
+send ":lua vim.o.columns=$columns; vim.o.lines=$rows; vim.g.PROUD_EXPECTED_COLUMNS=$columns; vim.g.PROUD_EXPECTED_LINES=$rows; vim.g.PROUD_EXPECTED_WIDTH=[expr {int(($columns - 2 - 2 - 3) / 2)}]; vim.g.PROUD_EXPECTED_HEIGHT=[expr {$rows - 1 - 2 - 3 - 1 - 1 - 2}]; dofile(vim.env.PROUD_ROOT..'/tests/terminal/resize_assert.lua')\r"
+wait_for {RESIZE_CHANGED_OK=true} "real terminal restores rounded surface geometry"
+send ":redraw!\r"
+sleep 0.1
+send ":lua dofile(vim.env.PROUD_ROOT..'/tests/terminal/browser_layout_assert.lua')\r"
+wait_for {SIZE_OK=true} "restored rounded two-card browser layout"
+send {:lua local state=require('proud.session').current.state; local list=state.surface.panes.list; state.cursor=2; vim.api.nvim_win_set_height(list.window,5); vim.api.nvim_win_set_cursor(list.window,{6,12}); vim.api.nvim_win_call(list.window,function() vim.fn.winrestview({topline=4,lnum=6,col=12}) end); vim.api.nvim_feedkeys('j','x',false); local view=vim.api.nvim_win_call(list.window,function() return vim.fn.winsaveview() end); local lines=vim.api.nvim_buf_get_lines(list.buffer,6,8,false); local ok=state.cursor==3 and #lines==2 and lines[1]:find('▌',1,true)==1 and lines[2]:find('▌',1,true)==1 and lines[2]:find('●',1,true)==nil and view.topline<=5 and view.topline+2<=7 and view.topline+4>=8; vim.g.PROUD_SCROLL_OK=ok and 'SCROLL_OK=true' or 'SCROLL_OK=false'; vim.cmd('echomsg '..vim.g.PROUD_SCROLL_OK); vim.cmd('redraw!')}
+wait_for {SCROLL_OK=true} "adjacent two-row selection reveal at the lower edge"
+send {:lua local state=require('proud.session').current.state; local list=state.surface.panes.list; state.cursor=3; local ui=require('proud.ui'); ui.set_cursor(list.buffer,7,12,8,{reserved_rows=2}); vim.api.nvim_win_call(list.window,function() vim.fn.winrestview({topline=2,lnum=7,col=12}) end); vim.api.nvim_feedkeys('K','x',false); local view=vim.api.nvim_win_call(list.window,function() return vim.fn.winsaveview() end); local rows=vim.api.nvim_buf_get_lines(list.buffer,4,6,false); local ok=state.cursor==2 and 5>view.topline+1 and 6>view.topline+1 and #rows==2 and rows[1]:find('▌',1,true)==1 and rows[2]:find('▌',1,true)==1 and rows[2]:find('●',1,true)==nil; vim.g.PROUD_UPWARD_SCROLL_OK=ok and 'UPWARD_SCROLL_OK=true' or 'UPWARD_SCROLL_OK=false'; vim.cmd('echomsg '..vim.g.PROUD_UPWARD_SCROLL_OK); vim.cmd('redraw!')}
+wait_for {UPWARD_SCROLL_OK=true} "upward selection stays below the in-window header"
+sleep 1
+send ":qa!\r"
+expect eof

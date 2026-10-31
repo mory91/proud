@@ -1,0 +1,36 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nFILTER HEADER FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern { return }
+    timeout { fail "timed out waiting for $label" }
+    eof { fail "Neovim exited while waiting for $label" }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && ./scripts/run_proud_test_nvim.sh"
+stty rows 30 columns 100
+wait_for {PR} "PR filter header"
+wait_for {retry is:open} "initial filter"
+send ":lua vim.g.PROUD_EXPECTED_COUNT='3/3'; vim.g.PROUD_COUNT_LABEL='HEADER_INITIAL'; dofile(vim.env.PROUD_ROOT..'/tests/terminal/header_count_assert.lua')\r"
+wait_for {HEADER_INITIAL=true.*3/3} "initial rendered source count"
+send "/"
+send "\x15"
+send "label:capture"
+wait_for {#479[^\r\n]*Fix Capture list pagination} "typed filter updates the PR list"
+send "\x1b"
+send ":lua vim.g.PROUD_EXPECTED_COUNT='1/3'; vim.g.PROUD_COUNT_LABEL='HEADER_FILTERED'; dofile(vim.env.PROUD_ROOT..'/tests/terminal/header_count_assert.lua')\r"
+wait_for {HEADER_FILTERED=true.*1/3} "filtered rendered source count"
+send ":lua require('proud.session').current.state.return_to_list()\r"
+send {:lua local h=require('proud.session').current.state.surface.panes.list.header; vim.api.nvim_echo({{('FILTER_OK='..tostring(h.get_value()=='label:capture'))}},false,{})}
+send "\r"
+wait_for {FILTER_OK=true} "in-page filter value"
+send ":qa!\r"
+expect eof

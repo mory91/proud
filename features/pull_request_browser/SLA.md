@@ -1,0 +1,31 @@
+# Performance SLA
+
+- Workload: open one 25-pull-request page from a 500-pull-request backlog with only the preselected description.
+- Timing: p95 at most `2 ms` across 30 measured iterations after 5 warmups.
+- Memory: maximum Lua heap delta at most `256 KiB`.
+- Workload: append two sequential 25-pull-request cursor pages after selection movement.
+- Timing: p95 at most `2 ms` across 30 measured iterations after 5 warmups.
+- Memory: maximum Lua heap delta at most `256 KiB`.
+- Workload: render 100 retained pull requests after cursor pagination with a matching `retry is:open` query and a 100-line first-message preview.
+- Timing: p95 at most `3 ms` across 30 measured iterations after 5 warmups.
+- Memory: maximum Lua heap delta at most `512 KiB`.
+- Workload: focus and explore the first content row of a 100-line PR description preview 40 times.
+- Timing: p95 at most `1 ms` across 40 measured iterations after 5 warmups.
+- Memory: maximum Lua heap delta at most `128 KiB`.
+- Workload: schedule 200 rapid filter edits and cancel the settled request.
+- Timing: p95 at most `2 ms` across 25 measured iterations after 20 warmups.
+- Memory: maximum Lua heap delta at most `256 KiB`.
+- Workload: schedule 200 rapid cursor-selected descriptions and cancel the settled request.
+- Timing: p95 at most `2 ms` across 25 measured iterations after 20 warmups.
+- Memory: maximum Lua heap delta at most `256 KiB`.
+- Workload: schedule 200 rapid source-query changes and cancel the settled request.
+- Timing: p95 at most `2 ms` across 25 measured iterations after 20 warmups.
+- Memory: maximum Lua heap delta at most `256 KiB`.
+- Workload: locally filter 500 pull requests and update the `filtered/total` header count.
+- Timing: p95 at most `3 ms` across 40 measured iterations after 5 warmups.
+- Memory: maximum Lua heap delta at most `512 KiB`.
+- Workload: format 2,000 GitHub timestamps as compact relative ages.
+- Timing: p95 at most `3 ms` across 30 measured iterations after 5 warmups.
+- Memory: maximum Lua heap delta at most `384 KiB`.
+- Screen lifecycle: 20 measured browser open/close cycles after 20 warmups; retained Lua heap growth and trend must be at most `64 KiB`, with no retained buffers or windows.
+- Failure: `bench/run.lua` exits non-zero on any timing or memory breach.

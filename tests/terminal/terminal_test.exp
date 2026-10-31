@@ -1,0 +1,78 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nTERMINAL E2E FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern {
+      return
+    }
+    timeout {
+      fail "timed out waiting for $label"
+    }
+    eof {
+      fail "Neovim exited while waiting for $label"
+    }
+  }
+}
+
+proc command {keys pattern label} {
+  send $keys
+  wait_for $pattern $label
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && ./scripts/run_proud_test_nvim.sh"
+set rows 45
+set columns 160
+if {[info exists env(PROUD_TERM_ROWS)]} {
+  set rows $env(PROUD_TERM_ROWS)
+}
+if {[info exists env(PROUD_TERM_COLUMNS)]} {
+  set columns $env(PROUD_TERM_COLUMNS)
+}
+stty rows $rows columns $columns
+
+wait_for {pull requests} "PR browser"
+wait_for {PR} "PR filter header"
+wait_for {retry is:open} "PR filter value"
+wait_for {#482[^\r\n]*Add retry backoff} "first pull request"
+
+send "j"
+send ":lua dofile(vim.env.PROUD_ROOT..'/tests/terminal/pr_selection_assert.lua')\r"
+wait_for {SELECTED_SUBTITLE_OK=true} "second pull request title and complete subtitle after one move"
+sleep 0.2
+command "\r" {#479 overview} "pull request overview"
+command "v\x0c:lua vim.env.PROUD_SIDEBAR_MODE='viewed'; dofile(vim.env.PROUD_ROOT..'/tests/terminal/sidebar_assert.lua')\r" {SIDEBAR_VIEWED_OK=true} "overview viewed state"
+
+command ":Proud demo single\r\x0c" {#482 diff.*single} "single file diff"
+command "\]f\x0c" {config\.ts} "file diff file navigation"
+command "\]t\x0c" {#482 diff.*single} "thread navigation refresh"
+send {:lua local s=require('proud.session').current.state; local ok=s.thread_cursor==2 and s.threads[2].path=='packages/runner/src/config.ts'; vim.api.nvim_echo({{('THREAD_OK='..tostring(ok))}},false,{})}
+send "\r"
+wait_for {THREAD_OK=true} "thread cursor moved to config.ts"
+command "R\x0c" {#482 diff.*single} "thread resolution refresh"
+send {:lua local s=require('proud.session').current.state; local ok=s.threads[2].resolved; vim.api.nvim_echo({{('RESOLVE_OK='..tostring(ok))}},false,{})}
+send "\r"
+wait_for {RESOLVE_OK=true} "thread resolution state"
+
+command ":Proud demo compare\r\x0c" {Compare[^\r\n]*merge base} "branch compare"
+command "S\x0c" {base[^\r\n]*feat/monitor-diffs[^\r\n]*head[^\r\n]*main} "branch swap"
+
+command ":Proud demo help\r\x0c" {Proud help} "help window"
+command "q\x0c" {Compare[^\r\n]*merge base} "help close"
+
+command ":lua local names={'ProudBackground','ProudPanel','ProudAccent','ProudAdd','ProudDelete'}; for _,name in ipairs(names) do local h=vim.api.nvim_get_hl(0,{name=name}); print(name..'='..string.format('#%06x',h.bg or 0)) end\r" {ProudBackground=#1c1217} "palette groups"
+wait_for {ProudPanel=#2a1b22} "ProudPanel palette"
+wait_for {ProudAccent=#f0642b} "ProudAccent palette"
+wait_for {ProudAdd=#17382e} "ProudAdd palette"
+wait_for {ProudDelete=#442127} "ProudDelete palette"
+
+send "\x0c"
+sleep 1
+send ":qa!\r"
+expect eof

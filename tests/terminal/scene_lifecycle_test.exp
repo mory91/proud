@@ -1,0 +1,37 @@
+set timeout 15
+
+proc fail {message} {
+  puts stderr "\nSCENE LIFECYCLE TERMINAL FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern { return }
+    timeout { fail "timed out waiting for $label" }
+    eof { fail "Neovim exited while waiting for $label" }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && PROUD_START=demo ./scripts/run_proud_test_nvim.sh"
+stty rows 30 columns 100
+wait_for {#482.*Add retry backoff} "pull request browser scene"
+
+send ":bd\r"
+sleep 0.5
+send ":lua vim.env.PROUD_SCENE_LIFECYCLE_MODE='buffer-delete'; dofile(vim.env.PROUD_ROOT..'/tests/terminal/scene_lifecycle_assert.lua')\r"
+wait_for {BUFFER_DELETE_OK=true} "buffer deletion closes the complete scene"
+send "\r"
+
+send ":Proud demo overview\r"
+wait_for {#482 overview} "replacement overview scene"
+sleep 0.5
+send ":lua vim.env.PROUD_SCENE_LIFECYCLE_MODE='replacement'; dofile(vim.env.PROUD_ROOT..'/tests/terminal/scene_lifecycle_assert.lua')\r"
+wait_for {REPLACEMENT_OK=true} "replacement scene survives old cleanup"
+send "\r"
+
+sleep 0.2
+send ":qa!\r"
+expect eof

@@ -1,0 +1,6 @@
+local root = vim.fn.getcwd()
+vim.opt.runtimepath:prepend(root)
+local harness = dofile(root .. "/tests/harness.lua")
+assert(loadfile(root .. "/features/github_api/tests/unit_spec.lua"))()(harness)
+assert(loadfile(root .. "/features/github_api/tests/e2e_spec.lua"))()(harness)
+harness.finish()

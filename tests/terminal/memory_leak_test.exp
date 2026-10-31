@@ -1,0 +1,31 @@
+set timeout 75
+
+proc fail {message} {
+  puts stderr "\nTERMINAL MEMORY LEAK FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern {
+      return
+    }
+    timeout {
+      fail "timed out waiting for $label"
+    }
+    eof {
+      fail "Neovim exited while waiting for $label"
+    }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && PROUD_START=none ./scripts/run_proud_test_nvim.sh"
+stty rows 40 columns 120
+sleep 0.5
+send ":lua vim.opt.runtimepath:prepend(vim.env.PROUD_ROOT); dofile(vim.env.PROUD_ROOT..'/tests/terminal/memory_leak_assert.lua')\n"
+wait_for {MEMORY_LEAK_OK=true screen=[^ ]+} "terminal memory lifecycle result"
+sleep 0.2
+send ":qa!\r"
+expect eof

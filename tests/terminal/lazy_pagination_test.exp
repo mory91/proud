@@ -1,0 +1,79 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nLAZY PAGINATION TERMINAL FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern {
+      return
+    }
+    timeout {
+      fail "timed out waiting for $label"
+    }
+    eof {
+      fail "Neovim exited while waiting for $label"
+    }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && PROUD_START=lazy-pagination-e2e ./scripts/run_proud_test_nvim.sh"
+set rows 30
+set columns 100
+if {[info exists env(PROUD_TERM_ROWS)]} {
+  set rows $env(PROUD_TERM_ROWS)
+}
+if {[info exists env(PROUD_TERM_COLUMNS)]} {
+  set columns $env(PROUD_TERM_COLUMNS)
+}
+stty rows $rows columns $columns
+
+expect {
+  -re {LAZY_PAGINATION_INITIAL_OK=true page=([0-9]+) total=40 descriptions=1} {
+    set page_size $expect_out(1,string)
+  }
+  timeout {
+    fail "timed out waiting for viewport-sized first page and first description"
+  }
+  eof {
+    fail "Neovim exited before viewport-sized first page"
+  }
+}
+send "j"
+send ":lua ProudLazyPaginationAssertSelection()\r"
+wait_for {LAZY_DESCRIPTION_CURSOR_OK=true selected=[0-9]+ descriptions=2} "cursor-selected description"
+send "\x10"
+send ":lua dofile(vim.env.PROUD_ROOT..'/tests/terminal/preview_focus_assert.lua')\r"
+wait_for {PREVIEW_FOCUS_OK=true row=[0-9]+} "preview cursor focus"
+send "j"
+send ":lua dofile(vim.env.PROUD_ROOT..'/tests/terminal/preview_focus_assert.lua')\r"
+wait_for {PREVIEW_FOCUS_OK=true row=[0-9]+} "preview cursor movement"
+send "\x0c"
+send ":lua dofile(vim.env.PROUD_ROOT..'/tests/terminal/preview_return_assert.lua')\r"
+wait_for {PREVIEW_RETURN_OK=true} "return to pull request list"
+
+if {$page_size > 2} {
+  send [string repeat "j" [expr {$page_size - 2}]]
+}
+sleep 0.2
+send ":lua ProudLazyPaginationAssertNextPage()\r"
+wait_for {LAZY_PAGE_LOAD_OK=true loaded=[0-9]+ total=40 pages=3} "two prefetched cursor pages"
+send ":lua ProudLazyPaginationAssertBudget()\r"
+wait_for {LAZY_FETCH_BUDGET_OK=true pages=3 descriptions=[0-9]+ available=40} "bounded description fetch budget"
+
+send "\t\t\t\t\t"
+send ":lua ProudLazyPaginationAssertRapidSources()\r"
+wait_for {SOURCE_TAB_RAPID_OK=true selected=3 pages=4} "debounced rapid source movement"
+send "\t"
+send ":lua ProudLazyPaginationAssertNextSource()\r"
+wait_for {SOURCE_TAB_NEXT_OK=true selected=4 pages=5} "next source tab"
+send "\x1b\[Z"
+send ":lua ProudLazyPaginationAssertPreviousSource()\r"
+wait_for {SOURCE_TAB_PREVIOUS_OK=true selected=3 pages=6} "previous source tab"
+
+send ":qa!\r"
+expect eof

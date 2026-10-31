@@ -1,0 +1,31 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nTERMINAL OVERVIEW DIFF FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern {
+      return
+    }
+    timeout {
+      fail "timed out waiting for $label"
+    }
+    eof {
+      fail "Neovim exited while waiting for $label"
+    }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && ./scripts/run_proud_test_nvim.sh"
+stty rows 40 columns 160
+wait_for {#482 overview} "overview workspace"
+send "\r"
+wait_for {#482 diff.*single} "diff workspace from overview"
+sleep 1
+send ":qa!\r"
+expect eof

@@ -1,0 +1,6 @@
+return function(test)
+  local result = require("memory_leak")("overview")
+  test.truthy(result.ok, "sidebar and overview have no E2E memory leak")
+  test.truthy(result.growth_kb <= result.max_growth_kb, "sidebar heap growth stays within SLA")
+  test.truthy(result.resources_stable, "sidebar releases its Vim pane and buffers")
+end

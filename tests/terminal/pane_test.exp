@@ -1,0 +1,32 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nTERMINAL PANE FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern {
+      return
+    }
+    timeout {
+      fail "timed out waiting for $label"
+    }
+    eof {
+      fail "Neovim exited while waiting for $label"
+    }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && ./scripts/run_proud_test_nvim.sh"
+stty rows 40 columns 120
+wait_for {proud|compare|Compare} "Proud scene"
+send {:lua local session=require('proud.session'); local state=(session.help and session.help.workspace and session.help) or (session.current and session.current.state); local surface=state and state.surface; local workspace=state and state.workspace; local function rounded(border) return type(border)=='table' and border[1]=='╭' and border[3]=='╮' and border[7]=='╰' and border[8]=='│' end; local ok=false; if surface then ok=#surface.order==tonumber(vim.env.PROUD_EXPECTED_PANES); local list=surface.panes.list; local preview=surface.panes.preview; local lh=list.header; local ph=preview.header; local lc=vim.api.nvim_win_get_config(list.window); local pc=vim.api.nvim_win_get_config(preview.window); ok=ok and list.buffer~=preview.buffer and vim.api.nvim_win_is_valid(list.window) and vim.api.nvim_win_is_valid(preview.window) and rounded(lc.border) and rounded(pc.border) and (not lc.title or lc.title=='') and (not pc.title or pc.title=='') and lc.relative=='editor' and pc.relative=='editor' and table.concat(vim.api.nvim_buf_get_lines(lh.buffer,0,-1,false),'\n'):find('PR > ',1,true)~=nil and table.concat(vim.api.nvim_buf_get_lines(ph.buffer,0,-1,false),'\n'):find('Preview',1,true)~=nil; elseif workspace then ok=#workspace.order==tonumber(vim.env.PROUD_EXPECTED_PANES); local seen={}; for _,pane_name in ipairs(workspace.order or {}) do local pane=workspace.panes[pane_name]; if seen[pane.buffer] then ok=false end; seen[pane.buffer]=true; local text=table.concat(vim.api.nvim_buf_get_lines(pane.buffer,0,-1,false),'\n'); if pane_name=='list' and text:find('Preview',1,true) then ok=false end end end; vim.api.nvim_echo({{('PANES_OK='..tostring(ok))}},false,{})}
+send "\r"
+wait_for {PANES_OK=true} "isolated scene panes"
+sleep 1
+send ":qa!\r"
+expect eof

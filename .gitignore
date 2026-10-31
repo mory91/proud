@@ -1,0 +1,5 @@
+test-env/nvim/
+test-env/state/
+test-env/.setup.*/
+.nvimlog
+.DS_Store

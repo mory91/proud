@@ -1,0 +1,52 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nTERMINAL COLOR FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern {
+      return
+    }
+    timeout {
+      fail "timed out waiting for $label"
+    }
+    eof {
+      fail "Neovim exited while waiting for $label"
+    }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && ./scripts/run_proud_test_nvim.sh"
+set rows 45
+set columns 160
+if {[info exists env(PROUD_TERM_ROWS)]} {
+  set rows $env(PROUD_TERM_ROWS)
+}
+if {[info exists env(PROUD_TERM_COLUMNS)]} {
+  set columns $env(PROUD_TERM_COLUMNS)
+}
+stty rows $rows columns $columns
+wait_for {proud|Compare|Proud help} "Proud scene"
+send ":Proud demo $env(PROUD_COLOR_SCENE)\r"
+switch -- $env(PROUD_COLOR_SCENE) {
+  browser {
+    wait_for {PR} "browser filter header"
+    wait_for {retry is:open} "browser filter value"
+  }
+  overview { wait_for {#482 overview} "overview color scene" }
+  single { wait_for {#482 diff[^\r\n]*single} "single diff color scene" }
+  compare { wait_for {Compare[^\r\n]*merge base} "compare color scene" }
+  help { wait_for {Proud help} "help color scene" }
+  review { wait_for {Review} "review color scene" }
+  default { fail "unknown color scene $env(PROUD_COLOR_SCENE)" }
+}
+send ":lua dofile(vim.env.PROUD_ROOT..'/tests/terminal/color_assertions.lua')\r"
+wait_for "COLORS_OK=$env(PROUD_COLOR_SCENE)" "semantic colors for $env(PROUD_COLOR_SCENE)"
+sleep 1
+send ":qa!\r"
+expect eof

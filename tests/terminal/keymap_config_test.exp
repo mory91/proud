@@ -1,0 +1,33 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nKEYMAP TERMINAL FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern { return }
+    timeout { fail "timed out waiting for $label" }
+    eof { fail "Neovim exited while waiting for $label" }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && PROUD_START=none ./scripts/run_proud_test_nvim.sh"
+stty rows 40 columns 120
+send ":lua require('proud').setup({keymaps={help='H',next_item='J',open='O',quit='Q'}})\r"
+send ":Proud demo\r"
+wait_for {#482.*Add retry backoff} "configured browser scene"
+send "J"
+wait_for {#479.*Fix Capture list pagination} "configured next action"
+send "O"
+wait_for {#479 overview} "configured open action"
+send "H"
+wait_for {Proud help} "configured help action"
+wait_for {Select the next pull request} "help reflects configured bindings"
+send "Q"
+wait_for {#479 overview} "configured quit closes help"
+send ":qa!\r"
+expect eof

@@ -1,0 +1,48 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nPREVIEW METADATA TERMINAL FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern {
+      return
+    }
+    timeout {
+      fail "timed out waiting for $label"
+    }
+    eof {
+      fail "Neovim exited while waiting for $label"
+    }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && PROUD_START=metadata-e2e ./scripts/run_proud_test_nvim.sh"
+stty rows 40 columns 140
+
+wait_for {PREVIEW_METADATA_TERMINAL_READY=true} "browser metadata scene"
+send "\004"
+send ":lua ProudMetadataAssertPreviewScrolled()\r"
+wait_for {PREVIEW_DESCRIPTION_SCROLL_OK=true} "long description scroll down"
+send "\025"
+send ":lua ProudMetadataAssertPreviewAtTop()\r"
+wait_for {PREVIEW_DESCRIPTION_TOP_OK=true} "long description scroll to top"
+
+send ":lua ProudMetadataOpenOverview()\r"
+wait_for {OVERVIEW_METADATA_TERMINAL_READY=true} "overview metadata scene"
+
+send ":lua ProudMetadataAssertOverviewPadding()\r"
+wait_for {OVERVIEW_PADDING_OK=true} "overview horizontal padding"
+send ":lua ProudMetadataAssertConversationCardColors()\r"
+wait_for {CONVERSATION_CARD_COLORS_OK=true} "conversation card background hierarchy"
+send ":lua ProudMetadataAssertConversationCardClipping()\r"
+wait_for {CONVERSATION_CARD_CLIP_OK=true} "partially visible conversation card"
+send ":lua ProudMetadataAssertConversationCardExited()\r"
+wait_for {CONVERSATION_CARD_EXIT_OK=true} "fully exited conversation card cleanup"
+
+send ":qa!\r"
+expect eof

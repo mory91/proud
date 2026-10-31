@@ -1,0 +1,31 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nUI FIRST TERMINAL FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+proc wait_for {pattern label} {
+  expect {
+    -re $pattern {
+      return
+    }
+    timeout {
+      fail "timed out waiting for $label"
+    }
+    eof {
+      fail "Neovim exited while waiting for $label"
+    }
+  }
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && PROUD_START=ui-first-e2e ./scripts/run_proud_test_nvim.sh"
+stty rows 40 columns 120
+wait_for {UI_FIRST_OPEN=true} "overview UI before delayed data"
+wait_for {UI_FIRST_HYDRATED=true} "overview async hydration"
+wait_for {UI_FIRST_COMPARE=true} "compare interaction before delayed data"
+sleep 0.2
+send ":qa!\r"
+expect eof

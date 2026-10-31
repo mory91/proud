@@ -1,0 +1,33 @@
+set timeout 10
+
+proc fail {message} {
+  puts stderr "\nGITHUB SDK TERMINAL FAIL: $message"
+  catch {send ":qa!\r"}
+  exit 1
+}
+
+log_user 1
+spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && PROUD_START=github-sdk-e2e ./scripts/run_proud_test_nvim.sh"
+set rows 30
+set columns 100
+if {[info exists env(PROUD_TERM_ROWS)]} {
+  set rows $env(PROUD_TERM_ROWS)
+}
+if {[info exists env(PROUD_TERM_COLUMNS)]} {
+  set columns $env(PROUD_TERM_COLUMNS)
+}
+stty rows $rows columns $columns
+
+expect {
+  -re {GITHUB_SDK_TERMINAL_OK} {
+  }
+  timeout {
+    fail "timed out waiting for SDK response"
+  }
+  eof {
+    fail "Neovim exited before SDK response"
+  }
+}
+
+send ":qa!\r"
+expect eof
