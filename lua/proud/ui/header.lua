@@ -85,32 +85,18 @@ function M.open(parent_window, options)
     return line
   end
 
-  function header.render()
-    if not vim.api.nvim_buf_is_valid(buffer) then
-      return
-    end
-    vim.api.nvim_buf_clear_namespace(buffer, namespace, 0, -1)
-    if not editable then
+  -- Static label row; returns the column where trailing text anchors.
+  local function render_label()
     local text = ui_text.fit(options.text or "", current_width())
-      vim.bo[buffer].modifiable = true
-      vim.api.nvim_buf_set_lines(buffer, 0, -1, false, { text })
-      vim.bo[buffer].modifiable = false
-      header_mark(buffer, 0, #text, options.text_group or "ProudAccentText")
-      local trailing = {}
-      for _, segment in ipairs(header.trailing_segments) do
-        local segment_text = tostring(segment.text or "")
-        if segment_text ~= "" then
-          table.insert(trailing, { segment_text, segment.group or options.trailing_group or "ProudMuted" })
-        end
-      end
-      if #trailing > 0 then
-        vim.api.nvim_buf_set_extmark(buffer, namespace, 0, #text, {
-          virt_text = trailing,
-          virt_text_pos = "right_align",
-        })
-      end
-      return
-    end
+    vim.bo[buffer].modifiable = true
+    vim.api.nvim_buf_set_lines(buffer, 0, -1, false, { text })
+    vim.bo[buffer].modifiable = false
+    header_mark(buffer, 0, #text, options.text_group or "ProudAccentText")
+    return #text
+  end
+
+  -- Editable prompt row; returns the column where trailing text anchors.
+  local function render_prompt()
     local line = vim.api.nvim_buf_get_lines(buffer, 0, 1, false)[1] or prompt
     local offset = 0
     for _, segment in ipairs(options.prompt_segments or {}) do
@@ -132,6 +118,11 @@ function M.open(parent_window, options)
     else
       header_mark(buffer, #prompt, #line, options.value_group or "ProudBright")
     end
+    return #line
+  end
+
+  -- Right-aligned trailing segments (e.g. the filtered/total count).
+  local function render_trailing(col)
     local trailing = {}
     for _, segment in ipairs(header.trailing_segments) do
       local segment_text = tostring(segment.text or "")
@@ -140,11 +131,19 @@ function M.open(parent_window, options)
       end
     end
     if #trailing > 0 then
-      vim.api.nvim_buf_set_extmark(buffer, namespace, 0, #line, {
+      vim.api.nvim_buf_set_extmark(buffer, namespace, 0, col, {
         virt_text = trailing,
         virt_text_pos = "right_align",
       })
     end
+  end
+
+  function header.render()
+    if not vim.api.nvim_buf_is_valid(buffer) then
+      return
+    end
+    vim.api.nvim_buf_clear_namespace(buffer, namespace, 0, -1)
+    render_trailing(editable and render_prompt() or render_label())
   end
 
   function header.set_trailing(value)
