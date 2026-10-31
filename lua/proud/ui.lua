@@ -330,7 +330,7 @@ function M.open_text_frame(window, options)
   return frame
 end
 
-function M.close_text_frame(frame)
+local function close_text_frame(frame)
   if frame and frame.close then
     frame:close()
   end
@@ -339,7 +339,7 @@ end
 local function sync_text_frame(pane, view)
   local padding = math.max(0, math.floor(tonumber(view and view.padding) or 0))
   if padding == 0 then
-    M.close_text_frame(pane.text_frame)
+    close_text_frame(pane.text_frame)
     pane.text_frame = nil
     return
   end
@@ -352,12 +352,15 @@ end
 
 local function close_text_frames(workspace)
   for _, pane in pairs(workspace.panes or {}) do
-    M.close_text_frame(pane.text_frame)
+    close_text_frame(pane.text_frame)
     pane.text_frame = nil
   end
 end
 
-function M.fit_view(view, width)
+-- Normalizes a view's lines to strings. Rows are intentionally not clipped:
+-- native horizontal scrolling reveals content past the pane width. The
+-- width argument is accepted for API compatibility and ignored.
+function M.fit_view(view, _width)
   local lines = {}
   for _, line in ipairs(view.lines or {}) do
     table.insert(lines, tostring(line or ""))
@@ -404,40 +407,6 @@ local function shift_view_rows(view, row_offset)
   }
 end
 
-function M.divide_view(view)
-  local left = { lines = {}, highlights = {} }
-  local right = { lines = {}, highlights = {} }
-  for line_index, line in ipairs(view.lines or {}) do
-    local separator = line:find("│ ", 1, true)
-    if separator then
-      local right_start = separator + 3
-      local right_content_offset = separator + 2
-      table.insert(left.lines, line:sub(1, separator - 1))
-      table.insert(right.lines, line:sub(right_start))
-      for _, item in ipairs(view.highlights or {}) do
-        if mark_line(item) == line_index - 1 then
-          local start_col = mark_start(item)
-          local end_col = mark_end(item, line)
-          if start_col < separator - 1 then
-            table.insert(left.highlights, { line_index - 1, start_col, math.min(end_col, separator - 1), mark_group(item) })
-          elseif end_col > right_content_offset then
-            table.insert(right.highlights, {
-              line_index - 1,
-              math.max(0, start_col - right_content_offset),
-              math.max(0, end_col - right_content_offset),
-              mark_group(item),
-            })
-          end
-        end
-      end
-    else
-      table.insert(left.lines, line)
-      table.insert(right.lines, "")
-    end
-  end
-  return left, right
-end
-
 local function prepare_buffer(name)
   for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_valid(buffer) and vim.api.nvim_buf_get_name(buffer) == name then
@@ -457,14 +426,6 @@ local function prepare_buffer(name)
   vim.bo[buffer].modifiable = false
   vim.b[buffer].proud_buffer = true
   return buffer
-end
-
-local function delete_owned_buffers(buffers)
-  for _, buffer in ipairs(buffers or {}) do
-    if type(buffer) == "number" and vim.api.nvim_buf_is_valid(buffer) then
-      pcall(vim.api.nvim_buf_delete, buffer, { force = true })
-    end
-  end
 end
 
 local function close_owned_window(window)
@@ -600,10 +561,6 @@ function M.create_scene_lifecycle(options)
     end,
   })
   return lifecycle
-end
-
-function M.buffer(name)
-  return prepare_buffer(name)
 end
 
 function M.render(buffer, view, options)
@@ -967,7 +924,7 @@ function M.pane_header_separator(parent_window, options)
   end }
 end
 
-function M.button_style(options)
+local function button_style(options)
   options = options or {}
   return {
     selected_group = options.selected_group or "ProudAccent",
@@ -982,7 +939,7 @@ function M.button_layout(items, selected, width, options)
   items = items or {}
   selected = math.max(1, math.min(#items, math.floor(tonumber(selected) or 1)))
   width = math.max(1, math.floor(tonumber(width) or 1))
-  local style = M.button_style(options)
+  local style = button_style(options)
   local visible = {}
   for index = 1, #items do
     table.insert(visible, index)
@@ -1075,15 +1032,11 @@ function M.button_layout(items, selected, width, options)
   }
 end
 
-function M.selector_layout(items, selected, width, options)
-  return M.button_layout(items, selected, width, options)
-end
-
-function M.open_selector_bar(options)
+local function open_selector_bar(options)
   options = options or {}
   local selected = math.max(1, math.min(#(options.items or {}), math.floor(tonumber(options.selected) or 1)))
   local width = math.max(1, math.floor(tonumber(options.width) or 1))
-  local style = M.button_style(options)
+  local style = button_style(options)
   local height = style.height
   local buffer = prepare_buffer(options.buffer_name or "proud://selector")
   local function render()
@@ -1144,39 +1097,6 @@ function M.open_selector_bar(options)
       end
     end,
   }
-end
-
-function M.set_title(buffer, title)
-  vim.api.nvim_buf_set_name(buffer, title)
-end
-
-function M.open_tab(view, name)
-  vim.cmd("tabnew")
-  local window = vim.api.nvim_get_current_win()
-  local buffer = prepare_buffer(name)
-  vim.api.nvim_win_set_buf(window, buffer)
-  decorate_window(window, buffer, name)
-  M.render(buffer, view)
-  return buffer, window
-end
-
-function M.open_surface(view, name, options)
-  options = options or {}
-  local buffer, window = M.open_tab(view, name)
-  vim.b[buffer].proud_title = options.title or title_for(name)
-  vim.wo[window].statusline = table.concat({
-    "%#ProudAccent# PROUD ",
-    "%#ProudBorder# ▎ ",
-    "%#ProudBright# ",
-    options.statusline or vim.b[buffer].proud_title,
-    " ",
-    "%#ProudBorder#▎",
-    "%<",
-    "%#ProudPanel#%=",
-    "%#ProudMuted# Help available",
-    "%#ProudPanel# ",
-  })
-  return buffer, window
 end
 
 function M.open_rounded_pair(views, options)
@@ -1299,7 +1219,7 @@ function M.open_rounded_pair(views, options)
   })
   local selector
   if options.selector then
-    selector = M.open_selector_bar(vim.tbl_extend("force", {
+    selector = open_selector_bar(vim.tbl_extend("force", {
       row = math.max(initial_geometry.top, initial_geometry.row - 2),
       col = initial_geometry.left_col,
       width = initial_geometry.available_width,
@@ -1454,16 +1374,6 @@ function M.open_rounded_pair(views, options)
   return surface
 end
 
-function M.open_split(view, name, direction)
-  vim.cmd(direction == "horizontal" and "botright new" or "botright vnew")
-  local window = vim.api.nvim_get_current_win()
-  local buffer = prepare_buffer(name)
-  vim.api.nvim_win_set_buf(window, buffer)
-  decorate_window(window, buffer, name)
-  M.render(buffer, view)
-  return buffer, window
-end
-
 local calculate_widths = geometry_math.workspace_widths
 
 function M.open_workspace(name, panes, options)
@@ -1587,11 +1497,8 @@ function M.render_workspace(workspace, views)
   for pane_name, pane in pairs(workspace.panes) do
     local view = views[pane_name]
     if view and vim.api.nvim_buf_is_valid(pane.buffer) then
-      local width = vim.api.nvim_win_is_valid(pane.window)
-        and vim.api.nvim_win_get_width(pane.window)
-        or pane.width
       pane.last_view = vim.deepcopy(view)
-      M.render(pane.buffer, M.fit_view(view, width))
+      M.render(pane.buffer, M.fit_view(view))
       sync_text_frame(pane, view)
     end
   end
@@ -1620,15 +1527,7 @@ function M.close_workspace(workspace)
   if not workspace then
     return
   end
-  if workspace.close then
-    workspace.close()
-  else
-    if vim.api.nvim_tabpage_is_valid(workspace.tabpage) then
-      vim.api.nvim_set_current_tabpage(workspace.tabpage)
-      vim.cmd("tabclose")
-    end
-    delete_owned_buffers(workspace.owned_buffers)
-  end
+  workspace.close()
 end
 
 function M.open_float(view, name, options)
@@ -1707,10 +1606,6 @@ function M.map_workspace(workspace, mode, lhs, rhs, description)
   for _, pane_name in ipairs(workspace.order) do
     M.map(workspace.panes[pane_name].buffer, mode, lhs, rhs, description)
   end
-end
-
-function M.feedback(message, level)
-  vim.notify(message, level or vim.log.levels.INFO, { title = "proud" })
 end
 
 return M
