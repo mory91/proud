@@ -89,7 +89,7 @@ local function check_sections(check)
     or "ProudDangerText"
   local name = tostring(check.name or "")
   local name_width = 18
-  local padding = string.rep(" ", math.max(0, name_width - vim.fn.strdisplaywidth(name)))
+  local padding = string.rep(" ", math.max(0, name_width - ui.display_width(name)))
   local sections = {
     { text = symbol, group = group },
     {

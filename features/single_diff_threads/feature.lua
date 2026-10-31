@@ -13,22 +13,6 @@ local function pad(value, width, align_right)
   return align_right and padding .. value or value .. padding
 end
 
-local function add_span(lines, highlights, line, needle, group)
-  if not needle or needle == "" then
-    return
-  end
-  local text = lines[line + 1] or ""
-  local start_col = text:find(needle, 1, true)
-  if start_col then
-    table.insert(highlights, {
-      line = line,
-      start_col = start_col - 1,
-      end_col = start_col - 1 + #needle,
-      group = group,
-    })
-  end
-end
-
 local function thread_index(state)
   local index = {}
   for _, thread in ipairs(state.threads) do
@@ -127,12 +111,12 @@ function M.render_code(state)
   table.insert(lines, ("main → %s"):format(state.pull.head_ref or "feature"))
   table.insert(lines, ("%s  [+%d -%d]  file %d / %d"):format(file.path, file.additions, file.deletions, state.file_cursor, #state.files))
   table.insert(lines, string.rep("─", 112))
-  add_span(lines, highlights, 0, "main →", "ProudAccentText")
-  add_span(lines, highlights, 0, state.pull.head_ref or "feature", "ProudAccentText")
-  add_span(lines, highlights, 1, file.path, "ProudBright")
-  add_span(lines, highlights, 1, "+" .. tostring(file.additions), "ProudSuccessText")
-  add_span(lines, highlights, 1, "-" .. tostring(file.deletions), "ProudDangerText")
-  add_span(lines, highlights, 2, string.rep("─", 24), "ProudMuted")
+  ui.view.span(lines, highlights, 0, "main →", "ProudAccentText")
+  ui.view.span(lines, highlights, 0, state.pull.head_ref or "feature", "ProudAccentText")
+  ui.view.span(lines, highlights, 1, file.path, "ProudBright")
+  ui.view.span(lines, highlights, 1, "+" .. tostring(file.additions), "ProudSuccessText")
+  ui.view.span(lines, highlights, 1, "-" .. tostring(file.deletions), "ProudDangerText")
+  ui.view.span(lines, highlights, 2, string.rep("─", 24), "ProudMuted")
 
   local index = thread_index(state)
   for _, line in ipairs(diff.file_rows(file, state.sources[file.path])) do
@@ -146,9 +130,9 @@ function M.render_code(state)
       elseif line.kind == "delete" then
         table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #lines[#lines], group = "ProudDelete" })
       end
-      add_span(lines, highlights, #lines - 1, ("%4d "):format(line_number), "ProudMuted")
+      ui.view.span(lines, highlights, #lines - 1, ("%4d "):format(line_number), "ProudMuted")
       if thread then
-        add_span(lines, highlights, #lines - 1, thread.resolved and "◇" or "◆", thread.resolved and "ProudSuccessText" or "ProudWarning")
+        ui.view.span(lines, highlights, #lines - 1, thread.resolved and "◇" or "◆", thread.resolved and "ProudSuccessText" or "ProudWarning")
       end
     elseif line.kind == "hunk" and not state.sources[file.path] then
       table.insert(lines, "     " .. line.text)
@@ -182,23 +166,23 @@ function M.render_thread(state)
   table.insert(lines, "Draft ready  ·  resolve when the thread is complete")
   local highlights = {}
   if current_thread then
-    add_span(lines, highlights, 1, current_thread.resolved and "◇ resolved" or "◆ Thread", current_thread.resolved and "ProudSuccessText" or "ProudWarning")
-    add_span(lines, highlights, 1, vim.fn.fnamemodify(current_thread.path, ":t"), "ProudBright")
-    add_span(lines, highlights, 1, current_thread.resolved and "resolved" or "unresolved", current_thread.resolved and "ProudSuccessText" or "ProudDangerText")
+    ui.view.span(lines, highlights, 1, current_thread.resolved and "◇ resolved" or "◆ Thread", current_thread.resolved and "ProudSuccessText" or "ProudWarning")
+    ui.view.span(lines, highlights, 1, vim.fn.fnamemodify(current_thread.path, ":t"), "ProudBright")
+    ui.view.span(lines, highlights, 1, current_thread.resolved and "resolved" or "unresolved", current_thread.resolved and "ProudSuccessText" or "ProudDangerText")
     local comment_line = 2
     for _, comment in ipairs(current_thread.comments) do
-      add_span(lines, highlights, comment_line, comment.author, "ProudAccentText")
-      add_span(lines, highlights, comment_line, comment.age, "ProudMuted")
+      ui.view.span(lines, highlights, comment_line, comment.author, "ProudAccentText")
+      ui.view.span(lines, highlights, comment_line, comment.age, "ProudMuted")
       comment_line = comment_line + 2
     end
   else
-    add_span(lines, highlights, 1, "No review threads", "ProudMuted")
+    ui.view.span(lines, highlights, 1, "No review threads", "ProudMuted")
   end
-  add_span(lines, highlights, #lines - 4, string.rep("─", 18), "ProudMuted")
-  add_span(lines, highlights, #lines - 3, "Reply as you", "ProudMuted")
-  add_span(lines, highlights, #lines - 2, "Write a reply...", "ProudMuted")
-  add_span(lines, highlights, #lines - 1, "Draft ready", "ProudAccentText")
-  add_span(lines, highlights, #lines - 1, "resolve", "ProudSuccessText")
+  ui.view.span(lines, highlights, #lines - 4, string.rep("─", 18), "ProudMuted")
+  ui.view.span(lines, highlights, #lines - 3, "Reply as you", "ProudMuted")
+  ui.view.span(lines, highlights, #lines - 2, "Write a reply...", "ProudMuted")
+  ui.view.span(lines, highlights, #lines - 1, "Draft ready", "ProudAccentText")
+  ui.view.span(lines, highlights, #lines - 1, "resolve", "ProudSuccessText")
   return { lines = lines, highlights = highlights }
 end
 
@@ -231,12 +215,12 @@ function M.render_files(state)
       table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #"▌", group = "ProudAccent" })
     end
     local line = #lines - 1
-    add_span(lines, highlights, line, file.status or "M", "ProudAccentText")
-    add_span(lines, highlights, line, vim.fn.fnamemodify(file.path, ":t"), "ProudBright")
-    add_span(lines, highlights, line, "+" .. tostring(file.additions), "ProudSuccessText")
-    add_span(lines, highlights, line, "-" .. tostring(file.deletions), "ProudDangerText")
+    ui.view.span(lines, highlights, line, file.status or "M", "ProudAccentText")
+    ui.view.span(lines, highlights, line, vim.fn.fnamemodify(file.path, ":t"), "ProudBright")
+    ui.view.span(lines, highlights, line, "+" .. tostring(file.additions), "ProudSuccessText")
+    ui.view.span(lines, highlights, line, "-" .. tostring(file.deletions), "ProudDangerText")
   end
-  add_span(lines, highlights, 0, "Files", "ProudAccentText")
+  ui.view.span(lines, highlights, 0, "Files", "ProudAccentText")
   return { lines = lines, highlights = highlights }
 end
 

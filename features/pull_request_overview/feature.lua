@@ -36,23 +36,6 @@ local function normalized_files(pull)
   return files
 end
 
-local function add_span(lines, highlights, line, needle, group)
-  if not needle or needle == "" or not lines[line + 1] then
-    return false
-  end
-  local start_col = lines[line + 1]:find(needle, 1, true)
-  if start_col then
-    table.insert(highlights, {
-      line = line,
-      start_col = start_col - 1,
-      end_col = start_col - 1 + #needle,
-      group = group,
-    })
-    return true
-  end
-  return false
-end
-
 local function find_line(lines, needle)
   for index, line in ipairs(lines) do
     if line:find(needle, 1, true) then
@@ -74,10 +57,11 @@ end
 local function separator_line(label, width)
   width = math.max(12, math.floor(width or 80))
   local prefix = "── " .. label .. " "
-  if vim.fn.strdisplaywidth(prefix) >= width then
+  local prefix_width = ui.display_width(prefix)
+  if prefix_width >= width then
     return ui.fit(prefix, width)
   end
-  return prefix .. string.rep("─", width - vim.fn.strdisplaywidth(prefix))
+  return prefix .. string.rep("─", width - prefix_width)
 end
 
 local function content_lines(value, width, padding)
@@ -96,13 +80,13 @@ local function content_spans(lines, highlights, value, start_line, group, needle
   local offset = 0
   for _, source in ipairs(vim.split(tostring(value or ""), "\n", { plain = true })) do
     if source ~= "" then
-      local found = add_span(lines, highlights, start_line + offset, needle or source, group)
+      local found = ui.view.span(lines, highlights, start_line + offset, needle or source, group)
       if not found and whole_line then
         local rendered = lines[start_line + offset + 1] or ""
         local text = rendered
           :sub(horizontal_padding + 1, math.max(horizontal_padding, #rendered - horizontal_padding))
           :gsub("%s+$", "")
-        add_span(lines, highlights, start_line + offset, text, group)
+        ui.view.span(lines, highlights, start_line + offset, text, group)
       end
     end
     offset = offset + 1
@@ -363,7 +347,7 @@ function M.render(state, width)
   local label_start = reviewer_start + #reviewer_lines
   local milestone_start = label_start + #label_lines
   content_spans(lines, highlights, pull.title, 0, "ProudBright", pull.title, true)
-  add_span(lines, highlights, 0, "#" .. tostring(pull.number), "ProudAccentText")
+  ui.view.span(lines, highlights, 0, "#" .. tostring(pull.number), "ProudAccentText")
   content_spans(lines, highlights, pull.state or "Open", summary_start, "ProudSuccessText", pull.state or "Open")
   content_spans(lines, highlights, pull.author or "unknown", summary_start, "ProudAccentText", pull.author or "unknown")
   content_spans(lines, highlights, pull.base_ref or "main", merge_start, "ProudAccentText", pull.base_ref or "main")
@@ -381,11 +365,11 @@ function M.render(state, width)
         :sub(horizontal_padding + 1, math.max(horizontal_padding, #line - horizontal_padding))
         :gsub("%s+$", "")
       if source:match("^## ") then
-        add_span(lines, highlights, body_line, text, "ProudAccentText")
+        ui.view.span(lines, highlights, body_line, text, "ProudAccentText")
       elseif source:match("^%- %[x%]") then
-        add_span(lines, highlights, body_line, "- [x]", "ProudSuccessText")
+        ui.view.span(lines, highlights, body_line, "- [x]", "ProudSuccessText")
       elseif source:match("^%- %[ %]") then
-        add_span(lines, highlights, body_line, "- [ ]", "ProudWarning")
+        ui.view.span(lines, highlights, body_line, "- [ ]", "ProudWarning")
       end
       body_line = body_line + 1
     end
@@ -394,12 +378,12 @@ function M.render(state, width)
   local card_items, conversation_count = conversation_items(pull)
   table.insert(lines, content_line(separator_line("Conversation " .. conversation_count, inner_width), width, horizontal_padding))
   local conversation_row = #lines - 1
-  add_span(lines, highlights, conversation_row, lines[conversation_row + 1], "ProudMuted")
+  ui.view.span(lines, highlights, conversation_row, lines[conversation_row + 1], "ProudMuted")
 
   local conversation_cards = require("proud.loader").load("conversation_cards")
   if #card_items == 0 then
     table.insert(lines, content_line("No conversation yet", width, horizontal_padding))
-    add_span(lines, highlights, #lines - 1, "No conversation yet", "ProudMuted")
+    ui.view.span(lines, highlights, #lines - 1, "No conversation yet", "ProudMuted")
     state.conversation_cards = {}
   else
     table.insert(lines, content_line("", width, horizontal_padding))
@@ -421,8 +405,8 @@ function M.render(state, width)
 
   local comment_row = find_line(lines, "Comment  draft")
   if comment_row then
-    add_span(lines, highlights, comment_row, "Comment", "ProudMuted")
-    add_span(lines, highlights, comment_row, "draft", "ProudAccentText")
+    ui.view.span(lines, highlights, comment_row, "Comment", "ProudMuted")
+    ui.view.span(lines, highlights, comment_row, "draft", "ProudAccentText")
   end
   return {
     lines = lines,

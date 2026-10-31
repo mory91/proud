@@ -13,22 +13,6 @@ local function totals(files)
   return additions, deletions
 end
 
-local function add_span(lines, highlights, line, needle, group)
-  if not needle or needle == "" then
-    return
-  end
-  local text = lines[line + 1] or ""
-  local start_col = text:find(needle, 1, true)
-  if start_col then
-    table.insert(highlights, {
-      line = line,
-      start_col = start_col - 1,
-      end_col = start_col - 1 + #needle,
-      group = group,
-    })
-  end
-end
-
 function M.create(input)
   input = input or {}
   return {
@@ -88,7 +72,7 @@ function M.render(state)
   end
   for _, commit in ipairs(state.commits) do
     table.insert(lines, ("%s  %s"):format(commit.sha or "", commit.message or ""))
-    add_span(lines, highlights, #lines - 1, commit.sha or "", "ProudAccentText")
+    ui.view.span(lines, highlights, #lines - 1, commit.sha or "", "ProudAccentText")
   end
   table.insert(lines, "")
   table.insert(lines, ("Files  %d  +%d  -%d"):format(#state.files, additions, deletions))
@@ -102,12 +86,12 @@ function M.render(state)
     ))
     local line = #lines - 1
     if file_index == 1 then
-      add_span(lines, highlights, line, file.status or "M", "ProudAccentText")
-      add_span(lines, highlights, line, file.path, "ProudBright")
-      add_span(lines, highlights, line, "+" .. tostring(file.additions or 0), "ProudSuccessText")
-      add_span(lines, highlights, line, "-" .. tostring(file.deletions or 0), "ProudDangerText")
+      ui.view.span(lines, highlights, line, file.status or "M", "ProudAccentText")
+      ui.view.span(lines, highlights, line, file.path, "ProudBright")
+      ui.view.span(lines, highlights, line, "+" .. tostring(file.additions or 0), "ProudSuccessText")
+      ui.view.span(lines, highlights, line, "-" .. tostring(file.deletions or 0), "ProudDangerText")
       if file.notes and file.notes > 0 then
-        add_span(lines, highlights, line, "◇" .. tostring(file.notes), "ProudWarning")
+        ui.view.span(lines, highlights, line, "◇" .. tostring(file.notes), "ProudWarning")
       end
     else
       local status_group = file.status == "A" and "ProudSuccessText"
@@ -124,20 +108,20 @@ function M.render(state)
   table.insert(lines, "")
   table.insert(lines, "Open a pull request or inspect this local branch comparison.")
   table.insert(lines, state.notes .. " local note stays local until you open a PR")
-  add_span(lines, highlights, 0, "Compare", "ProudAccentText")
-  add_span(lines, highlights, 0, state.mode, "ProudAccentText")
-  add_span(lines, highlights, 1, "base", "ProudMuted")
-  add_span(lines, highlights, 1, state.base, "ProudAccentText")
-  add_span(lines, highlights, 1, "head", "ProudMuted")
-  add_span(lines, highlights, 1, state.head, "ProudSuccessText")
-  add_span(lines, highlights, 2, "ahead", "ProudSuccessText")
-  add_span(lines, highlights, 2, "behind", "ProudWarning")
-  add_span(lines, highlights, 2, "local notes", "ProudMuted")
-  add_span(lines, highlights, 4, "Commits", "ProudAccentText")
-  add_span(lines, highlights, 6 + #state.commits, "Files", "ProudAccentText")
-  add_span(lines, highlights, #lines - 2, "Open a pull request", "ProudAccentText")
-  add_span(lines, highlights, #lines - 2, "local branch comparison", "ProudSuccessText")
-  add_span(lines, highlights, #lines - 1, "local note", "ProudMuted")
+  ui.view.span(lines, highlights, 0, "Compare", "ProudAccentText")
+  ui.view.span(lines, highlights, 0, state.mode, "ProudAccentText")
+  ui.view.span(lines, highlights, 1, "base", "ProudMuted")
+  ui.view.span(lines, highlights, 1, state.base, "ProudAccentText")
+  ui.view.span(lines, highlights, 1, "head", "ProudMuted")
+  ui.view.span(lines, highlights, 1, state.head, "ProudSuccessText")
+  ui.view.span(lines, highlights, 2, "ahead", "ProudSuccessText")
+  ui.view.span(lines, highlights, 2, "behind", "ProudWarning")
+  ui.view.span(lines, highlights, 2, "local notes", "ProudMuted")
+  ui.view.span(lines, highlights, 4, "Commits", "ProudAccentText")
+  ui.view.span(lines, highlights, 6 + #state.commits, "Files", "ProudAccentText")
+  ui.view.span(lines, highlights, #lines - 2, "Open a pull request", "ProudAccentText")
+  ui.view.span(lines, highlights, #lines - 2, "local branch comparison", "ProudSuccessText")
+  ui.view.span(lines, highlights, #lines - 1, "local note", "ProudMuted")
   return { lines = lines, highlights = highlights }
 end
 
@@ -170,8 +154,8 @@ function M.render_panes(state)
     },
     highlights = highlights_for(combined.lines, 0, 2, 0),
   }
-  add_span(summary.lines, summary.highlights, 6, "Open a pull request", "ProudAccentText")
-  add_span(summary.lines, summary.highlights, 7, "local note", "ProudMuted")
+  ui.view.span(summary.lines, summary.highlights, 6, "Open a pull request", "ProudAccentText")
+  ui.view.span(summary.lines, summary.highlights, 7, "local note", "ProudMuted")
   local changes = { lines = {}, highlights = {} }
   for index = 5, #combined.lines - 3 do
     table.insert(changes.lines, combined.lines[index])

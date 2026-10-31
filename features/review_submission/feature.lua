@@ -31,18 +31,6 @@ local function body_lines(value)
   return { "" }
 end
 
-local function add_span(lines, highlights, row, needle, group)
-  local column = tostring(lines[row + 1] or ""):find(needle, 1, true)
-  if column then
-    table.insert(highlights, {
-      line = row,
-      start_col = column - 1,
-      end_col = column - 1 + #needle,
-      group = group,
-    })
-  end
-end
-
 function M.create(pull, options)
   options = options or {}
   local selected = 1
@@ -120,17 +108,17 @@ function M.render(state, width)
   table.insert(lines, state.status ~= "" and state.status or "Review body is ready on the right")
   table.insert(lines, "")
   table.insert(lines, state.submitting and "Submitting review..." or "Submit review")
-  add_span(lines, highlights, 0, "Review", "ProudBright")
-  add_span(lines, highlights, 0, tostring(state.pull.number or ""), "ProudAccentText")
-  add_span(lines, highlights, 4, selected.description, "ProudMuted")
-  add_span(
+  ui.view.span(lines, highlights, 0, "Review", "ProudBright")
+  ui.view.span(lines, highlights, 0, tostring(state.pull.number or ""), "ProudAccentText")
+  ui.view.span(lines, highlights, 4, selected.description, "ProudMuted")
+  ui.view.span(
     lines,
     highlights,
     6,
     state.status ~= "" and state.status or "Review body is ready on the right",
     state.status == "" and "ProudMuted" or (state.status_group or "ProudSuccessText")
   )
-  add_span(lines, highlights, 8, "Submit review", state.submitting and "ProudMuted" or "ProudAccentText")
+  ui.view.span(lines, highlights, 8, "Submit review", state.submitting and "ProudMuted" or "ProudAccentText")
   return {
     lines = lines,
     highlights = highlights,

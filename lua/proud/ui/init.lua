@@ -13,6 +13,7 @@ local surface = require("proud.ui.surface")
 local text = require("proud.ui.text")
 local text_frame = require("proud.ui.text_frame")
 local themes = require("proud.ui.theme")
+local view = require("proud.ui.view")
 local window = require("proud.ui.window")
 local workspace = require("proud.ui.workspace")
 
@@ -20,6 +21,8 @@ local M = {
   themes = themes,
   geometry = geometry,
   float = float,
+  text = text,
+  view = view,
 }
 
 local buffer_lifecycle_group = vim.api.nvim_create_augroup("ProudBufferLifecycle", { clear = true })
@@ -53,6 +56,7 @@ M.layout_config = config.layout_config
 
 -- Text
 M.fit = text.fit
+M.display_width = text.display_width
 M.wrap_text = text.wrap_text
 M.content_lines = text.content_lines
 M.open_text_frame = text_frame.open
