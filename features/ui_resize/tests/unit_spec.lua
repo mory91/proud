@@ -1,6 +1,14 @@
 return function(test)
   local feature = require("proud.loader").load("ui_resize")
   local ui = require("proud.ui")
+  local function open_pair(list_view, preview_view, prefix)
+    return ui.open_pair({
+      panes = {
+        { name = "list", buffer_name = prefix .. "/list", view = list_view },
+        { name = "preview", buffer_name = prefix .. "/preview", view = preview_view },
+      },
+    })
+  end
   local geometry = feature.surface_geometry(120, 40)
   test.eq(3, geometry.gap, "default rounded surface keeps the configured gap")
   test.truthy(geometry.height > 0 and geometry.height <= 34, "surface height remains inside the editor area")
@@ -17,13 +25,7 @@ return function(test)
   test.eq("short", view.lines[1])
   test.eq("a much longer row that must be clipped safely", view.lines[2])
 
-  local surface = ui.open_rounded_pair({
-    list = { lines = { "owned list" } },
-    preview = { lines = { "owned preview" } },
-  }, {
-    list_name = "proud://lifecycle-owned/list",
-    preview_name = "proud://lifecycle-owned/preview",
-  })
+  local surface = open_pair({ lines = { "owned list" } }, { lines = { "owned preview" } }, "proud://lifecycle-owned")
   local tabpage = surface.tabpage
   local list_buffer = surface.panes.list.buffer
   local list_window = surface.panes.list.window
