@@ -54,10 +54,13 @@ function M.render(state)
   return v:build()
 end
 
-function M.render_panes(state)
+-- widths: optional { bindings = n } pane width for the separator rule
+-- (72 when unknown, e.g. in tests).
+function M.render_panes(state, widths)
+  widths = widths or {}
   local bindings = ui.view.new()
   bindings:line("Proud help   current bindings")
-  bindings:rule(nil, 72)
+  bindings:rule(nil, widths.bindings or 72)
   render_groups(bindings, state.groups, "ProudMuted")
 
   local commands = ui.view.new()
@@ -80,7 +83,13 @@ end
 
 function M.open(state, options)
   local panes = M.render_panes(state)
-  local workspace = ui.open_workspace("proud://help", {
+  local workspace
+  local function refresh()
+    local window = ui.workspace_window(workspace, "bindings")
+    local width = window and vim.api.nvim_win_is_valid(window) and vim.api.nvim_win_get_width(window) or nil
+    ui.render_workspace(workspace, M.render_panes(state, { bindings = width }))
+  end
+  workspace = ui.open_workspace("proud://help", {
     { name = "bindings", buffer_name = "proud://help/bindings", title = "Proud help", view = panes.bindings, weight = 0.46 },
     { name = "commands", buffer_name = "proud://help/commands", title = "Proud help", view = panes.commands, weight = 0.32 },
     { name = "runtime", buffer_name = "proud://help/runtime", title = "Proud help", view = panes.runtime, weight = 0.22 },
@@ -88,8 +97,13 @@ function M.open(state, options)
     focus = "bindings",
     title = "Proud help",
     statusline = "Proud help",
+    on_resize = function()
+      refresh()
+    end,
   })
   state.workspace = workspace
+  state.refresh = refresh
+  refresh()
   state.buffer = ui.workspace_buffer(workspace, "bindings")
   state.window = ui.workspace_window(workspace, "bindings")
   return state.buffer, state.window

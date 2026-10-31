@@ -89,15 +89,19 @@ function M.next_thread(state, delta)
   state.thread_cursor = (state.thread_cursor - 1 + delta) % #state.threads + 1
 end
 
-local RULE_112 = string.rep("─", 112)
-local RULE_HEAD_24 = string.rep("─", 24)
-local RULE_TAIL_88 = string.rep("─", 112 - 24)
-local RULE_HEAD_18 = string.rep("─", 18)
-local RULE_TAIL_94 = string.rep("─", 112 - 18)
+-- Rule width when no pane width is known (tests, benchmarks).
+local DEFAULT_RULE_WIDTH = 112
+
+-- A separator `width` cells wide whose first `head` cells are muted.
+local function add_rule(v, width, head)
+  width = math.max(1, math.floor(width or DEFAULT_RULE_WIDTH))
+  head = math.min(head, width)
+  v:spans(string.rep("─", head), "ProudMuted", string.rep("─", width - head))
+end
 
 -- Diff rows use spans() and fill(): this renderer is on the diff SLA path
 -- (1,200 rows), so it avoids per-row chunk tables.
-function M.render_code(state)
+function M.render_code(state, width)
   local v = ui.view.new()
   local file = state.files[state.file_cursor]
   if not file then
@@ -113,7 +117,7 @@ function M.render_code(state)
     "-" .. tostring(file.deletions), "ProudDangerText",
     ("]  file %d / %d"):format(state.file_cursor, #state.files)
   )
-  v:spans(RULE_HEAD_24, "ProudMuted", RULE_TAIL_88)
+  add_rule(v, width, 24)
 
   local index = thread_index(state)
   for _, line in ipairs(diff.file_rows(file, state.sources[file.path])) do
@@ -143,7 +147,7 @@ function M.render_code(state)
   return v:build()
 end
 
-function M.render_thread(state)
+function M.render_thread(state, width)
   local v = ui.view.new()
   local current_thread = state.threads[state.thread_cursor]
   v:blank()
@@ -164,7 +168,7 @@ function M.render_thread(state)
   else
     v:spans("No review threads", "ProudMuted")
   end
-  v:spans(RULE_HEAD_18, "ProudMuted", RULE_TAIL_94)
+  add_rule(v, width, 18)
   v:spans("Reply as you", "ProudMuted", "  · markdown  · @ mention")
   if state.draft ~= "" then
     v:spans(state.draft)
@@ -217,12 +221,25 @@ function M.render_files(state)
   return v:build()
 end
 
-function M.render_panes(state)
+-- widths: optional { code = n, thread = n } pane widths for the rules.
+function M.render_panes(state, widths)
+  widths = widths or {}
   return {
     files = M.render_files(state),
-    code = M.render_code(state),
-    thread = M.render_thread(state),
+    code = M.render_code(state, widths.code),
+    thread = M.render_thread(state, widths.thread),
   }
+end
+
+local function pane_widths(workspace)
+  local widths = {}
+  for _, name in ipairs({ "code", "thread" }) do
+    local window = ui.workspace_window(workspace, name)
+    if window and vim.api.nvim_win_is_valid(window) then
+      widths[name] = vim.api.nvim_win_get_width(window)
+    end
+  end
+  return widths
 end
 
 function M.attach(buffer, state, options)
@@ -235,7 +252,7 @@ function M.attach(buffer, state, options)
   end
   local function refresh()
     ensure_source()
-    ui.render_workspace(options.workspace, M.render_panes(state))
+    ui.render_workspace(options.workspace, M.render_panes(state, pane_widths(options.workspace)))
   end
   local function select_file(file_cursor)
     if not state.files[file_cursor] then

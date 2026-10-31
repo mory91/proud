@@ -3,6 +3,18 @@ return function(test)
   local fixtures = require("proud.fixtures")
   local state = feature.create(fixtures.overview, fixtures.threads, fixtures.patch, fixtures.file_sources)
   local buffer = feature.open(state)
+  local function rule_width(pane, row)
+    local line = vim.api.nvim_buf_get_lines(state.workspace.panes[pane].buffer, row, row + 1, false)[1] or ""
+    return vim.fn.strdisplaywidth(line), vim.api.nvim_win_get_width(state.workspace.panes[pane].window)
+  end
+  local code_rule, code_width = rule_width("code", 2)
+  test.eq(code_width, code_rule, "the code pane rule spans the pane width")
+  vim.o.columns = math.max(80, vim.o.columns - 20)
+  vim.api.nvim_exec_autocmds("VimResized", {})
+  code_rule, code_width = rule_width("code", 2)
+  test.eq(code_width, code_rule, "the code pane rule follows a resize")
+  vim.o.columns = vim.o.columns + 20
+  vim.api.nvim_exec_autocmds("VimResized", {})
   vim.api.nvim_feedkeys("]f", "x", false)
   test.eq(2, state.file_cursor, "]f advances to the next file")
   vim.api.nvim_feedkeys("[f", "x", false)
