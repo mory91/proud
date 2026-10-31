@@ -170,7 +170,7 @@ end
 function ProudMetadataAssertConversationCardColors()
   local state = assert(session.current and session.current.state, "overview state is missing")
   local cards = assert(state.comment_card_windows, "conversation cards are missing")
-  local theme = require("proud.theme").groups()
+  local theme = require("proud.palette").groups()
   assert(theme.ProudCard.bg == theme.ProudBackground.bg, "root cards do not match the overview background")
   assert(theme.ProudCardReply.bg == theme.ProudPanel.bg, "replies do not use the simple panel shade")
   local root = assert(cards.cards[cards.specs[1].id], "root conversation card is missing")

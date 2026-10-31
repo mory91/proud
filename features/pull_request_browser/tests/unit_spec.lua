@@ -115,7 +115,7 @@ return function(test)
   test.contains(relative_view.lines[6], " · 1d · ", "one-day API timestamps render compactly")
 
   local ui = require("proud.ui")
-  local groups = require("proud.theme").groups()
+  local groups = require("proud.palette").groups()
   test.eq("#101828", groups.ProudBackground.bg, "base content background is dark")
   test.eq("#253347", groups.ProudSelection.bg, "only selected rows use the lighter shade")
   local source_state = feature.create({}, {})
