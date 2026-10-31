@@ -98,7 +98,15 @@ local function clip_row(highlights, row, length)
   end
 end
 
--- Finishes the open line; returns its 0-based row.
+-- Highlights the whole open line with `group`. It is recorded now, so
+-- highlights added afterwards on the same row draw on top of it.
+function View:fill(group)
+  local row = assert(self.open_row, "no view line open")
+  return self:mark(row, 0, math.huge, group)
+end
+
+-- Finishes the open line; returns its 0-based row. Highlights on the row
+-- are clipped to the final line length.
 function View:close()
   local row = assert(self.open_row, "no view line open")
   local count = self.part_count
@@ -119,8 +127,8 @@ function View:close()
   self.part_count = 0
   if self.width then
     line = ui_text.fit(line, self.width)
-    clip_row(self.highlights, row, #line)
   end
+  clip_row(self.highlights, row, #line)
   self.lines[row + 1] = line
   self.open_row = nil
   return row
