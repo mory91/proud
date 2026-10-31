@@ -26,8 +26,10 @@ function M.open(parent_window, options)
     end
     return width
   end
-  local buffer = ui_window.buffer(options.buffer_name or "proud://pane/header")
   local editable = options.editable or options.prompt ~= nil
+  local buffer = ui_window.buffer(options.buffer_name or "proud://pane/header", {
+    bo = { buftype = editable and "prompt" or "nofile", modifiable = editable },
+  })
   local function normalize_segments(value)
     if type(value) == "table" then
       return value
@@ -38,8 +40,6 @@ function M.open(parent_window, options)
     end
     return { { text = text, group = options.trailing_group or "ProudMuted" } }
   end
-  vim.bo[buffer].buftype = editable and "prompt" or "nofile"
-  vim.bo[buffer].modifiable = editable
   local prompt = editable and tostring(options.prompt or "") or ""
   if editable then
     vim.fn.prompt_setprompt(buffer, prompt)
@@ -242,7 +242,6 @@ function M.separator(parent_window, options)
   local width = math.max(1, parent.width or 1)
   local buffer = ui_window.buffer(options.buffer_name or "proud://pane/separator")
   local line = string.rep("─", width)
-  vim.bo[buffer].buftype = "nofile"
   vim.bo[buffer].modifiable = true
   vim.api.nvim_buf_set_lines(buffer, 0, -1, false, { line })
   vim.bo[buffer].modifiable = false

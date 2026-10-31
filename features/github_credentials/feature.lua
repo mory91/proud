@@ -344,13 +344,10 @@ function M.open(state, options)
   state.window = window
   state.header = header
   local modal_config = vim.api.nvim_win_get_config(window)
-  local prompt_buffer = vim.api.nvim_create_buf(false, true)
-  vim.bo[prompt_buffer].buftype = "nofile"
-  vim.bo[prompt_buffer].bufhidden = "wipe"
-  vim.bo[prompt_buffer].swapfile = false
-  vim.bo[prompt_buffer].undofile = false
-  vim.bo[prompt_buffer].undolevels = -1
-  vim.bo[prompt_buffer].modifiable = true
+  -- Unnamed and never reused; no undo history so the token is not retained.
+  local prompt_buffer = ui.buffer(nil, {
+    bo = { bufhidden = "wipe", modifiable = true, undofile = false, undolevels = -1 },
+  })
   vim.api.nvim_buf_set_lines(prompt_buffer, 0, -1, false, { "" })
   local prompt_window = vim.api.nvim_open_win(prompt_buffer, true, {
     relative = "editor",

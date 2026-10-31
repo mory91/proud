@@ -294,11 +294,10 @@ function M.sync(state, specs)
       end
     else
       if not card then
-        local buffer = vim.api.nvim_create_buf(false, true)
-        vim.bo[buffer].buftype = "nofile"
-        vim.bo[buffer].bufhidden = "wipe"
-        vim.bo[buffer].swapfile = false
-        vim.api.nvim_buf_set_name(buffer, "proud://conversation-card/" .. spec.id)
+        local buffer = ui.buffer("proud://conversation-card/" .. spec.id, {
+          reuse = false,
+          bo = { bufhidden = "wipe" },
+        })
         card = { buffer = buffer, signature = "" }
         state.cards[spec.id] = card
       end

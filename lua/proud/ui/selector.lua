@@ -124,8 +124,6 @@ function M.open_bar(options)
     local view = M.button_layout(options.items, selected, width, options)
     ui_render.render(buffer, { lines = { view.text }, highlights = view.highlights })
   end
-  vim.bo[buffer].buftype = "nofile"
-  vim.bo[buffer].modifiable = false
   -- options.placement() supplies live { row, col, width }; otherwise the
   -- bar stays at the static options.row / options.col / options.width.
   local function placement()

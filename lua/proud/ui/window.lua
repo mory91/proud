@@ -120,23 +120,43 @@ function M.decorate(window, buffer, name, options)
   })
 end
 
-function M.buffer(name)
+-- Buffer-local options every Proud buffer starts with.
+M.base_buffer_options = {
+  buftype = "nofile",
+  bufhidden = "hide",
+  swapfile = false,
+  modifiable = false,
+}
+
+local function find_buffer(name)
   for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_valid(buffer) and vim.api.nvim_buf_get_name(buffer) == name then
-      vim.bo[buffer].buftype = "nofile"
-      vim.bo[buffer].bufhidden = "hide"
-      vim.bo[buffer].swapfile = false
-      vim.bo[buffer].modifiable = false
-      vim.b[buffer].proud_buffer = true
       return buffer
     end
   end
-  local buffer = vim.api.nvim_create_buf(false, true)
-  pcall(vim.api.nvim_buf_set_name, buffer, name)
-  vim.bo[buffer].buftype = "nofile"
-  vim.bo[buffer].bufhidden = "hide"
-  vim.bo[buffer].swapfile = false
-  vim.bo[buffer].modifiable = false
+end
+
+-- Returns a scratch buffer named `name` (nil for an unnamed one), reusing
+-- an existing buffer with that name unless options.reuse == false.
+-- options.bo overrides or extends M.base_buffer_options.
+function M.buffer(name, options)
+  options = options or {}
+  local buffer = name and options.reuse ~= false and find_buffer(name) or nil
+  if not buffer then
+    buffer = vim.api.nvim_create_buf(false, true)
+    if name then
+      pcall(vim.api.nvim_buf_set_name, buffer, name)
+    end
+  end
+  local overrides = options.bo or {}
+  for option, value in pairs(M.base_buffer_options) do
+    if overrides[option] == nil then
+      vim.bo[buffer][option] = value
+    end
+  end
+  for option, value in pairs(overrides) do
+    vim.bo[buffer][option] = value
+  end
   vim.b[buffer].proud_buffer = true
   return buffer
 end
