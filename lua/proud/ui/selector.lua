@@ -121,8 +121,15 @@ function M.open_bar(options)
   local height = style.height
   local buffer = ui_window.buffer(options.buffer_name or "proud://selector")
   local function render()
-    local view = M.button_layout(options.items, selected, width, options)
-    ui_render.render(buffer, { lines = { view.text }, highlights = view.highlights })
+    local layout = M.button_layout(options.items, selected, width, options)
+    local highlights = {}
+    for _, item in ipairs(layout.highlights) do
+      highlights[#highlights + 1] = item[1]
+      highlights[#highlights + 1] = item[2]
+      highlights[#highlights + 1] = item[3]
+      highlights[#highlights + 1] = item[4]
+    end
+    ui_render.render(buffer, { lines = { layout.text }, highlights = highlights, highlight_format = "flat" })
   end
   -- options.placement() supplies live { row, col, width }; otherwise the
   -- bar stays at the static options.row / options.col / options.width.

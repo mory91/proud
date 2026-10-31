@@ -19,9 +19,6 @@ return function(test)
   test.truthy(span(lines, keyed, 0, "world", "G"), "span reports a found needle")
   test.eq(6, keyed[1].start_col, "keyed span start")
   test.eq(11, keyed[1].end_col, "keyed span end")
-  local tuple = {}
-  span(lines, tuple, 0, "hello", "G", "tuple")
-  test.eq(5, tuple[1][3], "tuple span end")
   local flat = { 9, 9, 9, "X" }
   span(lines, flat, 0, "world", "G", "flat")
   test.eq(8, #flat, "flat span appends four values")

@@ -5,22 +5,11 @@ local M = {}
 M.namespace = vim.api.nvim_create_namespace("proud")
 local namespace = M.namespace
 
-local function mark_line(item)
-  return item.line or item[1]
-end
-
-local function mark_start(item)
-  return item.start_col or item[2] or 0
-end
-
-local function mark_end(item, line)
-  return item.end_col or item[3] or #line
-end
-
-local function mark_group(item)
-  return item.group or item[4]
-end
-
+-- Views carry highlights in one of two formats:
+--   highlight_format = "flat": r, s, e, group repeated in one array
+--     (what proud.ui.view's builder emits; preferred)
+--   otherwise keyed: { line = r, start_col = s, end_col = e, group = g },
+--     where a missing start_col means 0 and a missing end_col the line end.
 -- Normalizes a view's lines to strings. Rows are intentionally not clipped:
 -- native horizontal scrolling reveals content past the pane width. The
 -- width argument is accepted for API compatibility and ignored.
@@ -84,8 +73,9 @@ function M.render(buffer, view, options)
     end
   else
     for _, item in ipairs(highlights) do
-      local row = mark_line(item) + offset
-      set_mark(buffer, lines, row, mark_start(item), mark_end(item, lines[row + 1] or ""), mark_group(item))
+      local row = item.line + offset
+      local line = lines[row + 1] or ""
+      set_mark(buffer, lines, row, item.start_col or 0, item.end_col or #line, item.group)
     end
   end
   vim.bo[buffer].modifiable = false

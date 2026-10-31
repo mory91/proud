@@ -10,8 +10,9 @@ local M = {}
 -- Highlights the first occurrence of `needle` on 0-based `row` of `lines`.
 -- `format` selects the highlight shape appended to `highlights`:
 --   nil / "keyed": { line = r, start_col = s, end_col = e, group = g }
---   "tuple":       { r, s, e, g }
 --   "flat":        r, s, e, g appended in place (highlight_format = "flat")
+-- Views therefore use one of two highlight formats: flat (preferred, and
+-- what the builder emits) or keyed.
 -- Returns true when the needle was found.
 function M.span(lines, highlights, row, needle, group, format)
   if not needle or needle == "" then
@@ -29,8 +30,6 @@ function M.span(lines, highlights, row, needle, group, format)
     highlights[count + 2] = start_col
     highlights[count + 3] = end_col
     highlights[count + 4] = group
-  elseif format == "tuple" then
-    highlights[#highlights + 1] = { row, start_col, end_col, group }
   else
     highlights[#highlights + 1] = { line = row, start_col = start_col, end_col = end_col, group = group }
   end
