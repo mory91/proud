@@ -52,24 +52,16 @@ function M.open(parent_window, options)
     ),
   })
   local window = frame.window
-  vim.wo[window].winhighlight = table.concat({
-    "Normal:" .. (options.normal_group or "ProudBackground"),
-    "NormalNC:" .. (options.normal_group or "ProudBackground"),
-    "NormalFloat:" .. (options.normal_group or "ProudBackground"),
-    "FloatBorder:" .. (options.border_group or "ProudBorder"),
-    "Cursor:" .. (options.cursor_group or "ProudAccent"),
-    "lCursor:" .. (options.cursor_group or "ProudAccent"),
-    "CursorIM:" .. (options.cursor_group or "ProudAccent"),
-    "Prompt:" .. (options.prompt_group or "ProudAccentText"),
-    "EndOfBuffer:ProudBorder",
-  }, ",")
-  vim.wo[window].number = false
-  vim.wo[window].relativenumber = false
-  vim.wo[window].signcolumn = "no"
-  vim.wo[window].cursorline = false
-  vim.wo[window].wrap = false
-  vim.wo[window].linebreak = false
-  vim.wo[window].breakindent = false
+  local normal_group = options.normal_group or "ProudBackground"
+  ui_window.winhighlight(window, ui_window.cursor_groups({
+    Normal = normal_group,
+    NormalNC = normal_group,
+    NormalFloat = normal_group,
+    FloatBorder = options.border_group or "ProudBorder",
+    Prompt = options.prompt_group or "ProudAccentText",
+    EndOfBuffer = "ProudBorder",
+  }, options.cursor_group or "ProudAccent"))
+  ui_window.options(window)
   vim.b[buffer].proud_title = options.title or "proud header"
   local header = {
     buffer = buffer,
@@ -266,17 +258,14 @@ function M.separator(parent_window, options)
     }),
   })
   local window = frame.window
-  vim.wo[window].winhighlight = table.concat({
-    "Normal:" .. (options.normal_group or "ProudBackground"),
-    "NormalNC:" .. (options.normal_group or "ProudBackground"),
-    "NormalFloat:" .. (options.normal_group or "ProudBackground"),
-    "EndOfBuffer:ProudBorder",
-  }, ",")
-  vim.wo[window].number = false
-  vim.wo[window].relativenumber = false
-  vim.wo[window].signcolumn = "no"
-  vim.wo[window].cursorline = false
-  vim.wo[window].wrap = false
+  local normal_group = options.normal_group or "ProudBackground"
+  ui_window.winhighlight(window, {
+    Normal = normal_group,
+    NormalNC = normal_group,
+    NormalFloat = normal_group,
+    EndOfBuffer = "ProudBorder",
+  })
+  ui_window.options(window)
   return { window = window, buffer = buffer, render = function()
     if not vim.api.nvim_win_is_valid(parent_window) or not vim.api.nvim_win_is_valid(window) then
       return

@@ -21,9 +21,8 @@ function M.open_float(view, name, options)
     style = "minimal",
     border = "rounded",
   })
-  vim.wo[window].winhighlight = "NormalFloat:ProudBackground,FloatBorder:ProudAccent"
-  vim.wo[window].wrap = false
-  vim.wo[window].cursorline = true
+  ui_window.winhighlight(window, { NormalFloat = "ProudBackground", FloatBorder = "ProudAccent" })
+  ui_window.options(window, { cursorline = true })
   vim.b[buffer].proud_title = ui_window.title_for(name)
   vim.wo[window].statusline = "%#ProudAccent# PROUD %#ProudPanel# Help available"
   ui_render.render(buffer, view)

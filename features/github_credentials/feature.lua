@@ -255,7 +255,11 @@ function M.mask_prompt(buffer, window)
   if window and vim.api.nvim_win_is_valid(window) then
     vim.wo[window].conceallevel = 2
     vim.wo[window].concealcursor = "nvic"
-    vim.wo[window].winhighlight = "NormalFloat:ProudBackground,FloatBorder:ProudAccent,Conceal:ProudAccentText"
+    ui.winhighlight(window, {
+      NormalFloat = "ProudBackground",
+      FloatBorder = "ProudAccent",
+      Conceal = "ProudAccentText",
+    })
   end
   if not vim.b[buffer].proud_prompt_masked then
     vim.api.nvim_buf_call(buffer, function()
@@ -358,12 +362,8 @@ function M.open(state, options)
     border = "rounded",
     focusable = true,
   })
-  vim.wo[prompt_window].winhighlight = "NormalFloat:ProudBackground,FloatBorder:ProudAccent"
-  vim.wo[prompt_window].wrap = false
-  vim.wo[prompt_window].cursorline = false
-  vim.wo[prompt_window].number = false
-  vim.wo[prompt_window].relativenumber = false
-  vim.wo[prompt_window].signcolumn = "yes"
+  ui.winhighlight(prompt_window, { NormalFloat = "ProudBackground", FloatBorder = "ProudAccent" })
+  ui.window_options(prompt_window, { signcolumn = "yes" })
   local prompt_header = ui.open_pane_header(prompt_window, {
     buffer_name = "proud://headers/token",
     title = "token",
