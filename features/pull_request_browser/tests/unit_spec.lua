@@ -122,7 +122,7 @@ return function(test)
   test.eq(3, source_state.source_index, "All open is the default PR source")
   feature.set_source(source_state, 1)
   test.eq("is:open review-requested:@me", source_state.query, "source tabs map to PR list queries")
-  local selector_view = ui.selector_layout(feature.sources(), 3, 80)
+  local selector_view = ui.button_layout(feature.sources(), 3, 80)
   test.eq(80, vim.fn.strdisplaywidth(selector_view.text), "source selector fills a straight line")
   test.truthy(selector_view.text:find("  All open  ", 1, true) ~= nil, "selected source has larger button padding")
   for _, label in ipairs({ "Review requested", "Mine", "All open", "Recently viewed", "Branches" }) do

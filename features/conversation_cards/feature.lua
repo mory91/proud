@@ -319,33 +319,26 @@ function M.sync(state, specs)
         set_card_lines(card)
         card.signature = signature
       end
+      card.placement = {
+        relative = "win",
+        win = host_window,
+        row = clipped.row,
+        col = spec.col,
+        width = spec.width,
+        height = clipped.height,
+        border = card_border(clipped.top_visible, clipped.bottom_visible),
+        focusable = false,
+        zindex = 42,
+      }
       if not card.window or not vim.api.nvim_win_is_valid(card.window) then
-        card.window = vim.api.nvim_open_win(card.buffer, false, {
-          relative = "win",
-          win = host_window,
-          row = clipped.row,
-          col = spec.col,
-          width = spec.width,
-          height = clipped.height,
-          border = card_border(clipped.top_visible, clipped.bottom_visible),
-          style = "minimal",
-          focusable = false,
-          noautocmd = true,
-          zindex = 42,
+        card.float = ui.float.create(card.buffer, {
+          placement = function()
+            return card.placement
+          end,
         })
+        card.window = card.float.window
       else
-        vim.api.nvim_win_set_config(card.window, {
-          relative = "win",
-          win = host_window,
-          row = clipped.row,
-          col = spec.col,
-          width = spec.width,
-          height = clipped.height,
-          border = card_border(clipped.top_visible, clipped.bottom_visible),
-          style = "minimal",
-          focusable = false,
-          zindex = 42,
-        })
+        card.float.reposition()
       end
       vim.wo[card.window].winhighlight = card_window_highlight(card)
       vim.wo[card.window].wrap = false

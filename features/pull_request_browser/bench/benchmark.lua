@@ -55,7 +55,7 @@ local opening_workload = {
     }, { replace = true })
     local list = feature.render_list(opening_state, { width = 72 })
     local preview = feature.render_preview(opening_state, { width = 72 })
-    local selector = ui.selector_layout(feature.sources(), 3, 120)
+    local selector = ui.button_layout(feature.sources(), 3, 120)
     return #list.lines + #preview.lines + #selector.text + #feature.count_label(opening_state)
   end,
 }
