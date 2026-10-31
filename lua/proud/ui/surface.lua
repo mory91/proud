@@ -129,9 +129,14 @@ function M.open_rounded_pair(views, options)
   local selector
   if options.selector then
     selector = ui_selector.open_bar(vim.tbl_extend("force", {
-      row = math.max(initial_geometry.top, initial_geometry.row - 2),
-      col = initial_geometry.left_col,
-      width = initial_geometry.available_width,
+      placement = function()
+        local current = geometry()
+        return {
+          row = math.max(current.top, current.row - 2),
+          col = current.left_col,
+          width = current.available_width,
+        }
+      end,
       buffer_name = "proud://selector",
     }, options.selector))
   end
@@ -217,17 +222,6 @@ function M.open_rounded_pair(views, options)
       preview_header_separator.render()
     end
     if selector then
-      vim.api.nvim_win_set_config(selector.window, {
-        relative = "editor",
-        row = math.max(next_geometry.top, next_geometry.row - 2),
-        col = next_geometry.left_col,
-        width = next_geometry.available_width,
-        height = 1,
-        border = "none",
-        style = "minimal",
-        focusable = false,
-        zindex = 51,
-      })
       selector.resize()
     end
     surface.panes.list.width = next_geometry.left_width

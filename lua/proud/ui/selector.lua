@@ -1,3 +1,4 @@
+local ui_float = require("proud.ui.float")
 local ui_render = require("proud.ui.render")
 local ui_text = require("proud.ui.text")
 local ui_window = require("proud.ui.window")
@@ -125,18 +126,26 @@ function M.open_bar(options)
   end
   vim.bo[buffer].buftype = "nofile"
   vim.bo[buffer].modifiable = false
-  local window = vim.api.nvim_open_win(buffer, false, {
-    relative = "editor",
-    row = math.max(0, math.floor(tonumber(options.row) or 0)),
-    col = math.max(0, math.floor(tonumber(options.col) or 0)),
-    width = width,
-    height = height,
-    border = "none",
-    style = "minimal",
-    focusable = false,
-    noautocmd = true,
-    zindex = options.zindex or 51,
-  })
+  -- options.placement() supplies live { row, col, width }; otherwise the
+  -- bar stays at the static options.row / options.col / options.width.
+  local function placement()
+    local place = options.placement and options.placement() or {
+      row = options.row,
+      col = options.col,
+      width = width,
+    }
+    return {
+      row = math.max(0, math.floor(tonumber(place.row) or 0)),
+      col = math.max(0, math.floor(tonumber(place.col) or 0)),
+      width = math.max(1, math.floor(tonumber(place.width) or width)),
+      height = height,
+      focusable = false,
+      zindex = options.zindex or 51,
+    }
+  end
+  local frame = ui_float.create(buffer, { placement = placement })
+  local window = frame.window
+  width = vim.api.nvim_win_get_width(window)
   vim.wo[window].winhighlight = table.concat({
     "Normal:ProudBackground",
     "NormalNC:ProudBackground",
@@ -157,7 +166,7 @@ function M.open_bar(options)
       return selected
     end,
     resize = function()
-      if not vim.api.nvim_win_is_valid(window) then
+      if not frame.reposition() then
         return
       end
       local config = vim.api.nvim_win_get_config(window)

@@ -40,5 +40,6 @@ The shared API fits content before buffer rendering and constrains its visible v
 | `ui/config.lua` | Configured margins and gap |
 | `ui/surface.lua` | Rounded two-pane surface |
 | `ui/workspace.lua` | Native split workspaces |
-| `ui/float.lua` | Centered modal float |
+| `ui/float.lua` | Floating-window primitive: one placement drives open and reposition |
+| `ui/modal.lua` | Centered modal float |
 | `ui/theme.lua` | Theme registry |

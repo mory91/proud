@@ -1,3 +1,4 @@
+local ui_float = require("proud.ui.float")
 local ui_render = require("proud.ui.render")
 local ui_text = require("proud.ui.text")
 local ui_window = require("proud.ui.window")
@@ -43,17 +44,14 @@ function M.open(parent_window, options)
   if editable then
     vim.fn.prompt_setprompt(buffer, prompt)
   end
-  local window = vim.api.nvim_open_win(buffer, editable and options.focusable ~= false, {
-    relative = "editor",
-    row = options.inside and (parent.row or 0) + 1 or math.max(0, (parent.row or 0) - 1),
-    col = options.inside and (parent.col or 0) + 1 or parent.col or 0,
-    width = width,
-    height = 1,
-    border = "none",
-    style = "minimal",
-    noautocmd = true,
-    zindex = (parent.zindex or 50) + 1,
+  local frame = ui_float.create(buffer, {
+    enter = editable and options.focusable ~= false,
+    placement = ui_float.anchored(
+      parent_window,
+      options.inside and { row = 1, col = 1 } or { row = -1, clamp_row = true }
+    ),
   })
+  local window = frame.window
   vim.wo[window].winhighlight = table.concat({
     "Normal:" .. (options.normal_group or "ProudBackground"),
     "NormalNC:" .. (options.normal_group or "ProudBackground"),
@@ -207,22 +205,9 @@ function M.open(parent_window, options)
   end
 
   function header.resize()
-    if not vim.api.nvim_win_is_valid(parent_window) or not vim.api.nvim_win_is_valid(window) then
-      return
+    if frame.reposition() then
+      header.render()
     end
-    local current_parent = vim.api.nvim_win_get_config(parent_window)
-    local current_width = math.max(1, current_parent.width or 1)
-    vim.api.nvim_win_set_config(window, {
-      relative = "editor",
-      row = options.inside and (current_parent.row or 0) + 1 or math.max(0, (current_parent.row or 0) - 1),
-      col = options.inside and (current_parent.col or 0) + 1 or current_parent.col or 0,
-      width = current_width,
-      height = 1,
-      border = "none",
-      style = "minimal",
-      zindex = (current_parent.zindex or 50) + 1,
-    })
-    header.render()
   end
 
   if editable then
@@ -274,17 +259,13 @@ function M.separator(parent_window, options)
     end_col = #line,
     hl_group = options.group or "ProudBorder",
   })
-  local window = vim.api.nvim_open_win(buffer, false, {
-    relative = "editor",
-    row = (parent.row or 0) + (options.inside and 2 or 1),
-    col = (parent.col or 0) + (options.inside and 1 or 0),
-    width = width,
-    height = 1,
-    border = "none",
-    style = "minimal",
-    noautocmd = true,
-    zindex = (parent.zindex or 50) + 1,
+  local frame = ui_float.create(buffer, {
+    placement = ui_float.anchored(parent_window, {
+      row = options.inside and 2 or 1,
+      col = options.inside and 1 or 0,
+    }),
   })
+  local window = frame.window
   vim.wo[window].winhighlight = table.concat({
     "Normal:" .. (options.normal_group or "ProudBackground"),
     "NormalNC:" .. (options.normal_group or "ProudBackground"),
@@ -311,16 +292,7 @@ function M.separator(parent_window, options)
       end_col = #line,
       hl_group = options.group or "ProudBorder",
     })
-    vim.api.nvim_win_set_config(window, {
-      relative = "editor",
-      row = (current_parent.row or 0) + (options.inside and 2 or 1),
-      col = (current_parent.col or 0) + (options.inside and 1 or 0),
-      width = current_width,
-      height = 1,
-      border = "none",
-      style = "minimal",
-      zindex = (current_parent.zindex or 50) + 1,
-    })
+    frame.reposition()
   end }
 end
 

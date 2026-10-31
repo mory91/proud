@@ -6,6 +6,7 @@ local float = require("proud.ui.float")
 local geometry = require("proud.ui.geometry")
 local header = require("proud.ui.header")
 local lifecycle = require("proud.ui.lifecycle")
+local modal = require("proud.ui.modal")
 local render = require("proud.ui.render")
 local selector = require("proud.ui.selector")
 local surface = require("proud.ui.surface")
@@ -18,6 +19,7 @@ local workspace = require("proud.ui.workspace")
 local M = {
   themes = themes,
   geometry = geometry,
+  float = float,
 }
 
 local buffer_lifecycle_group = vim.api.nvim_create_augroup("ProudBufferLifecycle", { clear = true })
@@ -64,7 +66,7 @@ M.create_scene_lifecycle = lifecycle.create_scene_lifecycle
 M.open_pane_header = header.open
 M.button_layout = selector.button_layout
 M.open_rounded_pair = surface.open_rounded_pair
-M.open_float = float.open_float
+M.open_float = modal.open_float
 M.set_cursor = window.set_cursor
 
 -- Workspaces
