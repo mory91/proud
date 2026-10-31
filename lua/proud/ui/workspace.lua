@@ -49,11 +49,13 @@ function M.open_workspace(name, panes, options)
       window = window,
       weight = pane.weight or 1,
       width = widths[index],
-      last_view = vim.deepcopy(pane.view or { lines = {} }),
+      -- Views are rebuilt on every render and never mutated, so keeping a
+      -- reference is enough for re-rendering on resize.
+      last_view = pane.view or { lines = {} },
     }
     table.insert(workspace.order, pane.name)
     table.insert(workspace.owned_buffers, buffer)
-    ui_render.render(buffer, ui_render.fit_view(pane.view or { lines = {} }, widths[index]))
+    ui_render.render(buffer, pane.view or { lines = {} })
     ui_text_frame.sync(workspace.panes[pane.name], pane.view)
   end
 
@@ -114,7 +116,7 @@ function M.resize_workspace(workspace)
   for index, pane_name in ipairs(workspace.order) do
     local pane = workspace.panes[pane_name]
     if pane.last_view and vim.api.nvim_buf_is_valid(pane.buffer) then
-      ui_render.render(pane.buffer, ui_render.fit_view(pane.last_view, widths[index]))
+      ui_render.render(pane.buffer, pane.last_view)
       ui_text_frame.sync(pane, pane.last_view)
     end
   end
@@ -127,8 +129,8 @@ function M.render_workspace(workspace, views)
   for pane_name, pane in pairs(workspace.panes) do
     local view = views[pane_name]
     if view and vim.api.nvim_buf_is_valid(pane.buffer) then
-      pane.last_view = vim.deepcopy(view)
-      ui_render.render(pane.buffer, ui_render.fit_view(view))
+      pane.last_view = view
+      ui_render.render(pane.buffer, view)
       ui_text_frame.sync(pane, view)
     end
   end

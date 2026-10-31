@@ -36,80 +36,57 @@ function M.fit_view(view, _width)
   }
 end
 
-local function shift_view_rows(view, row_offset)
-  local lines = {}
-  local row_width = ui_text.display_width((view.lines or {})[1] or "")
-  for _ = 1, row_offset do
-    table.insert(lines, string.rep(" ", row_width))
+-- Buffer lines cannot contain newlines; replace them with spaces.
+local function single_line(value)
+  value = tostring(value)
+  if value:find("[\r\n]") then
+    value = (value:gsub("\r\n", "\n"):gsub("[\r\n]", " "))
   end
-  for _, line in ipairs(view.lines or {}) do
-    table.insert(lines, line)
-  end
-  local highlights = {}
-  if view.highlight_format == "flat" then
-    for index = 1, #(view.highlights or {}), 4 do
-      table.insert(highlights, view.highlights[index] + row_offset)
-      table.insert(highlights, view.highlights[index + 1])
-      table.insert(highlights, view.highlights[index + 2])
-      table.insert(highlights, view.highlights[index + 3])
-    end
-  else
-    for _, item in ipairs(view.highlights or {}) do
-      local shifted = vim.deepcopy(item)
-      if shifted.line ~= nil then
-        shifted.line = shifted.line + row_offset
-      elseif shifted[1] ~= nil then
-        shifted[1] = shifted[1] + row_offset
-      end
-      table.insert(highlights, shifted)
-    end
-  end
-  return {
-    lines = lines,
-    highlights = highlights,
-    highlight_format = view.highlight_format,
-  }
+  return value
 end
 
+local function set_mark(buffer, lines, row, start_col, end_col, group)
+  local line = lines[row + 1] or ""
+  start_col = math.max(0, math.min(start_col, #line))
+  end_col = math.max(start_col, math.min(end_col, #line))
+  if end_col > start_col then
+    vim.api.nvim_buf_set_extmark(buffer, namespace, row, start_col, {
+      end_col = end_col,
+      hl_group = group,
+    })
+  end
+end
+
+-- Writes a view into `buffer`. options.top_pad reserves blank rows above
+-- the content (e.g. for in-pane headers); highlight rows are offset while
+-- placing them, so the view itself is never copied or modified.
 function M.render(buffer, view, options)
   options = options or {}
-  if (options.top_pad or 0) > 0 then
-    view = shift_view_rows(view, options.top_pad)
-  end
+  local offset = math.max(0, math.floor(tonumber(options.top_pad) or 0))
+  local source = view.lines or {}
   local lines = {}
-  for index, value in ipairs(view.lines or {}) do
-    lines[index] = (tostring(value):gsub("\r\n", "\n"):gsub("[\r\n]", " "))
+  if offset > 0 then
+    local pad = string.rep(" ", ui_text.display_width(tostring(source[1] or "")))
+    for index = 1, offset do
+      lines[index] = pad
+    end
+  end
+  for index = 1, #source do
+    lines[offset + index] = single_line(source[index])
   end
   local highlights = view.highlights or {}
   vim.bo[buffer].modifiable = true
   vim.api.nvim_buf_set_lines(buffer, 0, -1, false, lines)
   vim.api.nvim_buf_clear_namespace(buffer, namespace, 0, -1)
-    if view.highlight_format == "flat" then
-      for index = 1, #highlights, 4 do
-        local row = highlights[index]
-        local line = lines[row + 1] or ""
-        local start_col = math.max(0, math.min(highlights[index + 1], #line))
-        local end_col = math.max(start_col, math.min(highlights[index + 2], #line))
-        if end_col > start_col then
-          vim.api.nvim_buf_set_extmark(buffer, namespace, row, start_col, {
-            end_col = end_col,
-            hl_group = highlights[index + 3],
-          })
-        end
-      end
-    else
-      for _, item in ipairs(highlights) do
-        local row = mark_line(item)
-        local line = lines[row + 1] or ""
-        local start_col = math.max(0, math.min(mark_start(item), #line))
-        local end_col = math.max(start_col, math.min(mark_end(item, line), #line))
-        if end_col > start_col then
-          vim.api.nvim_buf_set_extmark(buffer, namespace, row, start_col, {
-            end_col = end_col,
-            hl_group = mark_group(item),
-          })
-        end
-      end
+  if view.highlight_format == "flat" then
+    for index = 1, #highlights, 4 do
+      set_mark(buffer, lines, highlights[index] + offset, highlights[index + 1], highlights[index + 2], highlights[index + 3])
+    end
+  else
+    for _, item in ipairs(highlights) do
+      local row = mark_line(item) + offset
+      set_mark(buffer, lines, row, mark_start(item), mark_end(item, lines[row + 1] or ""), mark_group(item))
+    end
   end
   vim.bo[buffer].modifiable = false
 end
