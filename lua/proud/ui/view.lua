@@ -74,10 +74,19 @@ function View:add(text, group)
   if group then
     local highlights = self.highlights
     local n = #highlights
-    highlights[n + 1] = self.open_row
-    highlights[n + 2] = self.col
-    highlights[n + 3] = self.col + #text
-    highlights[n + 4] = group
+    if n >= 4
+      and highlights[n - 3] == self.open_row
+      and highlights[n - 1] == self.col
+      and highlights[n] == group
+    then
+      -- Continues the previous highlight: extend it instead of adding one.
+      highlights[n - 1] = self.col + #text
+    else
+      highlights[n + 1] = self.open_row
+      highlights[n + 2] = self.col
+      highlights[n + 3] = self.col + #text
+      highlights[n + 4] = group
+    end
   end
   self.col = self.col + #text
   return self
@@ -197,6 +206,104 @@ end
 function View:build()
   assert(self.open_row == nil, "view line still open")
   return { lines = self.lines, highlights = self.highlights, highlight_format = "flat" }
+end
+
+-- Group of the range covering byte `position` of the source, or nil.
+local function group_at(ranges, position)
+  for index = 1, #ranges, 3 do
+    if ranges[index] <= position and position < ranges[index + 1] then
+      return ranges[index + 2]
+    end
+  end
+end
+
+-- Appends source bytes [start, stop) split by highlight ranges, spending at
+-- most `budget` bytes. Returns the remaining budget.
+local function add_slice(v, source, ranges, start, stop, budget)
+  stop = math.min(stop, start + budget)
+  local position = start
+  while position < stop do
+    local group = group_at(ranges, position)
+    local next_stop = stop
+    for index = 1, #ranges, 3 do
+      local edge_a, edge_b = ranges[index], ranges[index + 1]
+      if edge_a > position and edge_a < next_stop then
+        next_stop = edge_a
+      end
+      if edge_b > position and edge_b < next_stop then
+        next_stop = edge_b
+      end
+    end
+    v:add(source:sub(position + 1, next_stop), group)
+    position = next_stop
+  end
+  return budget - (stop - start)
+end
+
+-- Appends chunks wrapped exactly like ui.content_lines: options.width is
+-- the full width including options.padding on both sides, and wrapping
+-- follows options.wrap or Neovim's 'wrap'. Each chunk's highlight follows
+-- its text onto every wrapped line; a joining space is highlighted when the
+-- whitespace it replaces was inside one highlighted chunk. Returns the
+-- first and last rows written.
+function View:wrapped(chunks, options)
+  options = options or {}
+  local width = math.max(1, math.floor(options.width or self.width or 80))
+  local padding = math.max(0, math.floor(options.padding or 0))
+  padding = math.min(padding, math.floor((width - 1) / 2))
+  local inner_width = width - padding * 2
+  local margin = string.rep(" ", padding)
+  local wrap_enabled = ui_text.should_wrap(options)
+
+  local parts, ranges, position = {}, {}, 0
+  for _, chunk in ipairs(chunks) do
+    local text, group
+    if type(chunk) == "table" then
+      text, group = tostring(chunk[1] or ""), chunk[2]
+    else
+      text = tostring(chunk or "")
+    end
+    parts[#parts + 1] = text
+    if group and text ~= "" then
+      ranges[#ranges + 1] = position
+      ranges[#ranges + 1] = position + #text
+      ranges[#ranges + 1] = group
+    end
+    position = position + #text
+  end
+  local source = table.concat(parts)
+
+  local first_row
+  local last_row
+  for _, line_ranges in ipairs(ui_text.wrap_pieces(source, inner_width, { wrap = wrap_enabled })) do
+    local content = ui_text.piece_text(source, line_ranges)
+    local budget = #content
+    local pad = 0
+    if wrap_enabled then
+      local clipped = ui_text.clip(content, inner_width)
+      budget = #clipped
+      pad = inner_width - ui_text.display_width(clipped)
+    end
+    local row = self:open()
+    first_row = first_row or row
+    last_row = row
+    self:add(margin)
+    for index = 1, #line_ranges, 2 do
+      if index > 1 and budget > 0 then
+        local before, after = line_ranges[index - 1], line_ranges[index]
+        local group = group_at(ranges, before - 1)
+        if group == nil or group ~= group_at(ranges, after) or group_at(ranges, before) ~= group then
+          group = nil
+        end
+        self:add(" ", group)
+        budget = budget - 1
+      end
+      budget = add_slice(self, source, ranges, line_ranges[index], line_ranges[index + 1], math.max(0, budget))
+    end
+    self:add(string.rep(" ", pad) .. margin)
+    self:close()
+  end
+  return first_row, last_row
 end
 
 -- Spaces needed after `value` to fill `width` display cells (for %-Ns-style

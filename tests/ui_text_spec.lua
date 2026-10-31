@@ -68,4 +68,19 @@ return function(test)
   test.eq(13, sv.highlights[2], "spans records exact start columns")
   test.eq(19, sv.highlights[3], "spans records exact end columns")
   test.eq(4, #sv.highlights, "spans skips nil groups")
+
+  local wrapped = ui.view.new()
+  local first, last = wrapped:wrapped(
+    { { "Make the retry loop resilient", "T" }, "  ", { "#482", "N" } },
+    { width = 20, padding = 2, wrap = true }
+  )
+  local wv = wrapped:build()
+  test.eq(ui.content_lines("Make the retry loop resilient  #482", { width = 20, padding = 2, wrap = true }), wv.lines, "wrapped lines match content_lines")
+  test.eq(0, first, "wrapped returns its first row")
+  test.eq(#wv.lines - 1, last, "wrapped returns its last row")
+  test.highlighted(wv, "resilient", "T", "continuation lines keep their chunk's highlight")
+  test.highlighted(wv, "#482", "N", "a wrapped trailing chunk keeps its highlight")
+  local merged = ui.view.new()
+  merged:line({ "ab", "G" }, { "cd", "G" })
+  test.eq(4, #merged:build().highlights, "touching same-group chunks merge into one highlight")
 end
