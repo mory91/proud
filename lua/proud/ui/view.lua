@@ -101,9 +101,20 @@ end
 -- Finishes the open line; returns its 0-based row.
 function View:close()
   local row = assert(self.open_row, "no view line open")
-  local line = table.concat(self.parts, "", 1, self.part_count)
-  for index = 1, self.part_count do
-    self.parts[index] = nil
+  local count = self.part_count
+  local parts = self.parts
+  local line
+  if count == 0 then
+    line = ""
+  elseif count == 1 then
+    -- Single chunk: reuse the string itself (no copy for constant text).
+    line = parts[1]
+    parts[1] = nil
+  else
+    line = table.concat(parts, "", 1, count)
+    for index = 1, count do
+      parts[index] = nil
+    end
   end
   self.part_count = 0
   if self.width then
@@ -126,6 +137,19 @@ function View:line(...)
     else
       self:add(chunk)
     end
+  end
+  return self:close()
+end
+
+-- Allocation-free alternative to line(): alternating text and group
+-- arguments (group may be nil for plain text). Returns the row.
+--   v:spans("The token is ", nil, "hidden", "ProudSuccessText", ".")
+function View:spans(...)
+  self:open()
+  local count = select("#", ...)
+  for index = 1, count, 2 do
+    local text, group = select(index, ...)
+    self:add(text, group)
   end
   return self:close()
 end

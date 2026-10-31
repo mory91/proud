@@ -63,4 +63,12 @@ return function(test)
   local compare = require("proud.loader").load("branch_compare")
   local loading = compare.render(compare.create({ base = "main", head = "feature", loading = true }))
   test.highlighted(loading, "Files", "ProudAccentText", "the Files heading is highlighted while loading")
+
+  local spanned = ui.view.new()
+  test.eq(0, spanned:spans("The token is ", nil, "hidden", "G", "."), "spans returns its row")
+  local sv = spanned:build()
+  test.eq("The token is hidden.", sv.lines[1], "spans joins alternating text")
+  test.eq(13, sv.highlights[2], "spans records exact start columns")
+  test.eq(19, sv.highlights[3], "spans records exact end columns")
+  test.eq(4, #sv.highlights, "spans skips nil groups")
 end

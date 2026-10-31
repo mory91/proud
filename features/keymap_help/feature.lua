@@ -10,101 +10,72 @@ function M.create(groups, options)
   }
 end
 
-function M.render(state)
-  local lines = {
-    "Proud help   bindings shown here are configurable",
-    string.rep("─", 112),
-  }
-  local highlights = {}
-  for _, group in ipairs(state.groups) do
-    table.insert(lines, group.title)
-    table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #group.title, group = "ProudAccentText" })
-    table.insert(lines, "")
+-- Byte padding, matching string.format's %-Ns columns.
+local function pad(value, width)
+  return string.rep(" ", math.max(0, width - #value))
+end
+
+local function render_groups(v, groups, describe_group)
+  for _, group in ipairs(groups) do
+    v:line({ group.title, "ProudAccentText" })
+    v:blank()
     for _, item in ipairs(group.items) do
-      table.insert(lines, ("%-18s %s"):format(item.lhs, item.description))
-      table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #item.lhs, group = "ProudBright" })
+      v:line({ item.lhs, "ProudBright" }, pad(item.lhs, 18), " ", { item.description, describe_group })
     end
-    table.insert(lines, "")
+    v:blank()
   end
-  table.insert(lines, "Commands")
-  table.insert(lines, ":Proud prs                 list pull requests")
-  table.insert(lines, ":Proud open {number}       open description and conversation")
-  table.insert(lines, ":Proud diff {number}       open full-file inline diff")
-  table.insert(lines, ":Proud compare {base} {head}")
-  table.insert(lines, "")
-  table.insert(lines, "GitHub auth validates and reuses a token; compare stays offline.")
-  ui.view.span(lines, highlights, #lines - 7, "Commands", "ProudAccentText")
-  ui.view.span(lines, highlights, #lines - 6, ":Proud prs", "ProudBright")
-  ui.view.span(lines, highlights, #lines - 5, ":Proud open {number}", "ProudBright")
-  ui.view.span(lines, highlights, #lines - 4, ":Proud diff {number}", "ProudBright")
-  ui.view.span(lines, highlights, #lines - 3, ":Proud compare {base} {head}", "ProudBright")
-  ui.view.span(lines, highlights, #lines - 1, "GitHub auth", "ProudAccentText")
-  ui.view.span(lines, highlights, #lines - 1, "validates and reuses a token", "ProudAccentText")
-  return { lines = lines, highlights = highlights }
+end
+
+-- One command row: the command in bright text, then an optional muted note
+-- starting at column 27.
+local function command_line(v, command, note, note_group)
+  if note then
+    v:line({ command, "ProudBright" }, pad(command, 27), { note, note_group })
+  else
+    v:line({ command, "ProudBright" })
+  end
+end
+
+function M.render(state)
+  local v = ui.view.new()
+  v:line("Proud help   bindings shown here are configurable")
+  v:rule(nil, 112)
+  render_groups(v, state.groups, nil)
+  v:line({ "Commands", "ProudAccentText" })
+  command_line(v, ":Proud prs", "list pull requests")
+  command_line(v, ":Proud open {number}", "open description and conversation")
+  command_line(v, ":Proud diff {number}", "open full-file inline diff")
+  command_line(v, ":Proud compare {base} {head}")
+  v:blank()
+  v:line(
+    { "GitHub auth", "ProudAccentText" }, " ",
+    { "validates and reuses a token", "ProudAccentText" }, "; compare stays offline."
+  )
+  return v:build()
 end
 
 function M.render_panes(state)
-  local bindings = {
-    lines = {
-      "Proud help   current bindings",
-      string.rep("─", 72),
-    },
-    highlights = {},
-  }
-  for _, group in ipairs(state.groups) do
-    table.insert(bindings.lines, group.title)
-    table.insert(bindings.highlights, {
-      line = #bindings.lines - 1,
-      start_col = 0,
-      end_col = #group.title,
-      group = "ProudAccentText",
-    })
-    table.insert(bindings.lines, "")
-    for _, item in ipairs(group.items) do
-      table.insert(bindings.lines, ("%-18s %s"):format(item.lhs, item.description))
-      local line = #bindings.lines - 1
-      ui.view.span(bindings.lines, bindings.highlights, line, item.lhs, "ProudBright")
-      ui.view.span(bindings.lines, bindings.highlights, line, item.description, "ProudMuted")
-    end
-    table.insert(bindings.lines, "")
-  end
-  local commands = {
-    lines = {
-      "Commands",
-      ":Proud prs                 list pull requests",
-      ":Proud open {number}       description and conversation",
-      ":Proud diff {number}       full-file inline diff",
-      ":Proud compare {base} {head}",
-    },
-    highlights = {},
-  }
-  ui.view.span(commands.lines, commands.highlights, 0, "Commands", "ProudAccentText")
-  ui.view.span(commands.lines, commands.highlights, 1, ":Proud prs", "ProudBright")
-  ui.view.span(commands.lines, commands.highlights, 1, "list pull requests", "ProudMuted")
-  ui.view.span(commands.lines, commands.highlights, 2, ":Proud open {number}", "ProudBright")
-  ui.view.span(commands.lines, commands.highlights, 2, "description and conversation", "ProudMuted")
-  ui.view.span(commands.lines, commands.highlights, 3, ":Proud diff {number}", "ProudBright")
-  ui.view.span(commands.lines, commands.highlights, 3, "full-file inline diff", "ProudMuted")
-  ui.view.span(commands.lines, commands.highlights, 4, ":Proud compare {base} {head}", "ProudBright")
-  local runtime = {
-    lines = {
-      "Runtime",
-      "GitHub auth validates and reuses a token.",
-      "Compare works offline from local git.",
-      "",
-      "Every scene owns independent panes.",
-      "Word motions stay inside the active pane.",
-    },
-    highlights = {},
-  }
-  ui.view.span(runtime.lines, runtime.highlights, 0, "Runtime", "ProudAccentText")
-  ui.view.span(runtime.lines, runtime.highlights, 1, "GitHub auth", "ProudAccentText")
-  ui.view.span(runtime.lines, runtime.highlights, 1, "validates and reuses a token", "ProudMuted")
-  ui.view.span(runtime.lines, runtime.highlights, 2, "Compare", "ProudSuccessText")
-  ui.view.span(runtime.lines, runtime.highlights, 2, "offline", "ProudMuted")
-  ui.view.span(runtime.lines, runtime.highlights, 4, "independent panes.", "ProudSuccessText")
-  ui.view.span(runtime.lines, runtime.highlights, 5, "Word motions", "ProudMuted")
-  return { bindings = bindings, commands = commands, runtime = runtime }
+  local bindings = ui.view.new()
+  bindings:line("Proud help   current bindings")
+  bindings:rule(nil, 72)
+  render_groups(bindings, state.groups, "ProudMuted")
+
+  local commands = ui.view.new()
+  commands:line({ "Commands", "ProudAccentText" })
+  command_line(commands, ":Proud prs", "list pull requests", "ProudMuted")
+  command_line(commands, ":Proud open {number}", "description and conversation", "ProudMuted")
+  command_line(commands, ":Proud diff {number}", "full-file inline diff", "ProudMuted")
+  command_line(commands, ":Proud compare {base} {head}")
+
+  local runtime = ui.view.new()
+  runtime:line({ "Runtime", "ProudAccentText" })
+  runtime:line({ "GitHub auth", "ProudAccentText" }, " ", { "validates and reuses a token", "ProudMuted" }, ".")
+  runtime:line({ "Compare", "ProudSuccessText" }, " works ", { "offline", "ProudMuted" }, " from local git.")
+  runtime:blank()
+  runtime:line("Every scene owns ", { "independent panes.", "ProudSuccessText" })
+  runtime:line({ "Word motions", "ProudMuted" }, " stay inside the active pane.")
+
+  return { bindings = bindings:build(), commands = commands:build(), runtime = runtime:build() }
 end
 
 function M.open(state, options)

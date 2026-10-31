@@ -79,11 +79,9 @@ end
 
 function M.render(state, width)
   width = math.max(24, math.floor(tonumber(width) or 44))
-  local lines = {
-    ("Review #%s"):format(tostring(state.pull.number or "")),
-    string.rep("─", width),
-  }
-  local highlights = {}
+  local v = ui.view.new()
+  v:line({ "Review", "ProudBright" }, " #", { tostring(state.pull.number or ""), "ProudAccentText" })
+  v:rule(nil, width)
   local labels = vim.tbl_map(function(decision)
     return decision.label
   end, state.decisions)
@@ -92,38 +90,26 @@ function M.render(state, width)
     item_padding = 1,
     separator_width = 1,
   })
-  table.insert(lines, buttons.text)
+  local button_row = v:line(buttons.text)
   for _, item in ipairs(buttons.highlights) do
-    table.insert(highlights, {
-      line = #lines - 1,
-      start_col = item[2],
-      end_col = item[3],
-      group = item[4],
-    })
+    v:mark(button_row, item[2], item[3], item[4])
   end
-  table.insert(lines, string.rep("─", width))
+  v:rule(nil, width)
   local selected = M.selected(state)
-  table.insert(lines, selected.description)
-  table.insert(lines, "")
-  table.insert(lines, state.status ~= "" and state.status or "Review body is ready on the right")
-  table.insert(lines, "")
-  table.insert(lines, state.submitting and "Submitting review..." or "Submit review")
-  ui.view.span(lines, highlights, 0, "Review", "ProudBright")
-  ui.view.span(lines, highlights, 0, tostring(state.pull.number or ""), "ProudAccentText")
-  ui.view.span(lines, highlights, 4, selected.description, "ProudMuted")
-  ui.view.span(
-    lines,
-    highlights,
-    6,
-    state.status ~= "" and state.status or "Review body is ready on the right",
-    state.status == "" and "ProudMuted" or (state.status_group or "ProudSuccessText")
-  )
-  ui.view.span(lines, highlights, 8, "Submit review", state.submitting and "ProudMuted" or "ProudAccentText")
-  return {
-    lines = lines,
-    highlights = highlights,
-    highlight_format = "table",
-  }
+  v:line({ selected.description, "ProudMuted" })
+  v:blank()
+  if state.status ~= "" then
+    v:line({ state.status, state.status_group or "ProudSuccessText" })
+  else
+    v:line({ "Review body is ready on the right", "ProudMuted" })
+  end
+  v:blank()
+  if state.submitting then
+    v:line({ "Submitting review...", "ProudMuted" })
+  else
+    v:line({ "Submit review", "ProudAccentText" })
+  end
+  return v:build()
 end
 
 function M.render_body(state)
