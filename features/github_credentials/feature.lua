@@ -127,38 +127,49 @@ function M.create(options)
   }
 end
 
+-- Uses spans() rather than chunk tables: this renderer is on the
+-- credentials memory SLA path, where per-render tables add up.
 function M.render(state)
-  local lines = {
-    "proud credentials",
-    separator,
-    "GitHub token required",
-    state.error and ("Error  " .. state.error) or "",
-    state.busy and "Validating GitHub repository access…" or "No reusable credential is available.",
-    state.busy and "This page will close when validation succeeds." or "type the token in the page below with repository read access.",
-    "",
-    "The token is hidden while entered and stored owner-only.",
-    "It is reused on later launches and in later scenes.",
-    "Help is available from every scene.",
-    "",
-    "Credential  " .. (state.short_token_path or vim.fn.fnamemodify(state.token_path, ":~")),
-    "",
-    state.busy and "Validating…" or "Submit or cancel from the focused token field.",
-  }
-  local highlights = {}
-  ui.view.span(lines, highlights, 0, "proud credentials", "ProudAccentText")
-  ui.view.span(lines, highlights, 2, "GitHub token required", "ProudAccentText")
-  ui.view.span(lines, highlights, 3, "Error", "ProudDangerText")
-  if not state.busy then
-    ui.view.span(lines, highlights, 5, "type the token in the page below", "ProudAccentText")
-    ui.view.span(lines, highlights, 5, "repository read access", "ProudSuccessText")
+  local v = ui.view.new()
+  v:spans("proud credentials", "ProudAccentText")
+  v:spans(separator)
+  v:spans("GitHub token required", "ProudAccentText")
+  if state.error then
+    v:spans("Error", "ProudDangerText", "  " .. state.error)
+  else
+    v:blank()
   end
-  ui.view.span(lines, highlights, 7, "hidden", "ProudSuccessText")
-  ui.view.span(lines, highlights, 7, "owner-only", "ProudSuccessText")
-  ui.view.span(lines, highlights, 8, "reused", "ProudSuccessText")
-  ui.view.span(lines, highlights, 9, "Help", "ProudAccentText")
-  ui.view.span(lines, highlights, 11, "Credential", "ProudMuted")
-  ui.view.span(lines, highlights, 13, state.busy and "Validating…" or "Submit", "ProudAccentText")
-  return { lines = lines, highlights = highlights }
+  if state.busy then
+    v:spans("Validating GitHub repository access…")
+    v:spans("This page will close when validation succeeds.")
+  else
+    v:spans("No reusable credential is available.")
+    v:spans(
+      "type the token in the page below", "ProudAccentText",
+      " with ", nil,
+      "repository read access", "ProudSuccessText",
+      "."
+    )
+  end
+  v:blank()
+  v:spans(
+    "The token is ", nil,
+    "hidden", "ProudSuccessText",
+    " while entered and stored ", nil,
+    "owner-only", "ProudSuccessText",
+    "."
+  )
+  v:spans("It is ", nil, "reused", "ProudSuccessText", " on later launches and in later scenes.")
+  v:spans("Help", "ProudAccentText", " is available from every scene.")
+  v:blank()
+  v:spans("Credential", "ProudMuted", "  " .. (state.short_token_path or vim.fn.fnamemodify(state.token_path, ":~")))
+  v:blank()
+  if state.busy then
+    v:spans("Validating…", "ProudAccentText")
+  else
+    v:spans("Submit", "ProudAccentText", " or cancel from the focused token field.")
+  end
+  return v:build()
 end
 
 function M.submit(state, value, options, callback)
