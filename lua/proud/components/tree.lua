@@ -1,4 +1,5 @@
 local section_row = require("proud.components.section_row")
+local text = require("proud.ui.text")
 
 local M = {}
 
@@ -12,23 +13,6 @@ local function spaces(count)
     spacing_cache[count] = value
   end
   return value
-end
-
-local function fit_line(value, width)
-  value = tostring(value or "")
-  width = math.max(1, math.floor(width))
-  local value_width = vim.fn.strdisplaywidth(value)
-  if value_width <= width then
-    return value .. spaces(width - value_width)
-  end
-  if not value:find("[\128-\255]") then
-    return value:sub(1, width)
-  end
-  local clipped = vim.fn.strcharpart(value, 0, vim.fn.strchars(value))
-  while vim.fn.strdisplaywidth(clipped) > width do
-    clipped = vim.fn.strcharpart(clipped, 0, math.max(0, vim.fn.strchars(clipped) - 1))
-  end
-  return clipped .. spaces(width - vim.fn.strdisplaywidth(clipped))
 end
 
 local function expandable(node)
@@ -304,7 +288,7 @@ function M.render(state, width)
       parts[index] = nil
     end
     if width and width > 0 then
-      line = fit_line(line, width)
+      line = text.fit(line, width)
     end
     line_count = line_count + 1
     lines[line_count] = line

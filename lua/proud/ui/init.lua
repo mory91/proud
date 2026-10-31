@@ -20,6 +20,7 @@ local M = {
   themes = themes,
   geometry = geometry,
   float = float,
+  text = text,
 }
 
 local buffer_lifecycle_group = vim.api.nvim_create_augroup("ProudBufferLifecycle", { clear = true })
@@ -53,6 +54,7 @@ M.layout_config = config.layout_config
 
 -- Text
 M.fit = text.fit
+M.display_width = text.display_width
 M.wrap_text = text.wrap_text
 M.content_lines = text.content_lines
 M.open_text_frame = text_frame.open

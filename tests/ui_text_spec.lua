@@ -1,0 +1,15 @@
+return function(test)
+  local ui = require("proud.ui")
+  test.eq(5, ui.display_width("abcde"), "ASCII width is byte length")
+  test.eq(6, ui.display_width("日本語"), "wide characters take two cells")
+  test.eq("abc  ", ui.fit("abc", 5), "fit pads short values")
+  test.eq("abcde", ui.fit("abcdefgh", 5), "fit clips ASCII")
+  local clipped = ui.fit("日本語テキスト", 5)
+  test.eq(5, ui.display_width(clipped), "fit clips wide text to the exact width")
+  test.eq("日本 ", clipped, "fit pads when a wide char would overflow")
+
+  local tree = require("proud.components.tree")
+  local state = tree.create({ { id = "a", label = "日本語のとても長いラベル" } })
+  local view = tree.render(state, 10)
+  test.eq(10, ui.display_width(view.lines[1]), "tree rows are fitted with the shared helper")
+end

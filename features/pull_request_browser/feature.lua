@@ -305,30 +305,8 @@ local function count_segments(state)
   }
 end
 
-local function display_width(value)
-  if not value:find("[\128-\255]") then
-    return #value
-  end
-  return vim.fn.strdisplaywidth(value)
-end
-
-local function fit(value, width)
-  value = tostring(value or "")
-  width = math.max(1, math.floor(width))
-  local value_width = display_width(value)
-  if value_width <= width then
-    return value .. string.rep(" ", width - value_width)
-  end
-  if not value:find("[\128-\255]") then
-    return value:sub(1, width)
-  end
-
-  local clipped = vim.fn.strcharpart(value, 0, width)
-  while display_width(clipped) > width do
-    clipped = vim.fn.strcharpart(clipped, 0, math.max(0, vim.fn.strchars(clipped) - 1))
-  end
-  return clipped .. string.rep(" ", width - display_width(clipped))
-end
+local fit = ui.fit
+local display_width = ui.display_width
 
 local function layout_widths(width)
   local terminal_width = math.max(40, math.floor(width or vim.o.columns or 160))

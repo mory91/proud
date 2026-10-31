@@ -22,5 +22,6 @@ end
 dofile(root .. "/tests/ui_theme_spec.lua")(harness)
 dofile(root .. "/tests/ui_float_spec.lua")(harness)
 dofile(root .. "/tests/ui_window_spec.lua")(harness)
+dofile(root .. "/tests/ui_text_spec.lua")(harness)
 dofile(root .. "/tests/unit_core_spec.lua")(harness)
 harness.finish()

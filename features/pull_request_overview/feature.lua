@@ -74,10 +74,11 @@ end
 local function separator_line(label, width)
   width = math.max(12, math.floor(width or 80))
   local prefix = "── " .. label .. " "
-  if vim.fn.strdisplaywidth(prefix) >= width then
+  local prefix_width = ui.display_width(prefix)
+  if prefix_width >= width then
     return ui.fit(prefix, width)
   end
-  return prefix .. string.rep("─", width - vim.fn.strdisplaywidth(prefix))
+  return prefix .. string.rep("─", width - prefix_width)
 end
 
 local function content_lines(value, width, padding)
