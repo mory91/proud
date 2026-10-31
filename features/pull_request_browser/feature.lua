@@ -315,21 +315,7 @@ local function layout_widths(width)
 end
 
 local function add_span(lines, highlights, line, needle, group, flat)
-  if not needle or needle == "" then
-    return
-  end
-  local text = lines[line + 1] or ""
-  local start_col = text:find(needle, 1, true)
-  if start_col then
-    if flat then
-      table.insert(highlights, line)
-      table.insert(highlights, start_col - 1)
-      table.insert(highlights, start_col - 1 + #needle)
-      table.insert(highlights, group)
-    else
-      table.insert(highlights, { line, start_col - 1, start_col - 1 + #needle, group })
-    end
-  end
+  return ui.view.span(lines, highlights, line, needle, group, flat and "flat" or "tuple")
 end
 
 local function push_flat(highlights, row, start_col, end_col, group)

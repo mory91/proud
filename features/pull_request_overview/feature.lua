@@ -36,22 +36,7 @@ local function normalized_files(pull)
   return files
 end
 
-local function add_span(lines, highlights, line, needle, group)
-  if not needle or needle == "" or not lines[line + 1] then
-    return false
-  end
-  local start_col = lines[line + 1]:find(needle, 1, true)
-  if start_col then
-    table.insert(highlights, {
-      line = line,
-      start_col = start_col - 1,
-      end_col = start_col - 1 + #needle,
-      group = group,
-    })
-    return true
-  end
-  return false
-end
+local add_span = ui.view.span
 
 local function find_line(lines, needle)
   for index, line in ipairs(lines) do

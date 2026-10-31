@@ -31,17 +31,7 @@ local function body_lines(value)
   return { "" }
 end
 
-local function add_span(lines, highlights, row, needle, group)
-  local column = tostring(lines[row + 1] or ""):find(needle, 1, true)
-  if column then
-    table.insert(highlights, {
-      line = row,
-      start_col = column - 1,
-      end_col = column - 1 + #needle,
-      group = group,
-    })
-  end
-end
+local add_span = ui.view.span
 
 function M.create(pull, options)
   options = options or {}

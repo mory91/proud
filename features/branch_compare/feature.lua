@@ -13,21 +13,7 @@ local function totals(files)
   return additions, deletions
 end
 
-local function add_span(lines, highlights, line, needle, group)
-  if not needle or needle == "" then
-    return
-  end
-  local text = lines[line + 1] or ""
-  local start_col = text:find(needle, 1, true)
-  if start_col then
-    table.insert(highlights, {
-      line = line,
-      start_col = start_col - 1,
-      end_col = start_col - 1 + #needle,
-      group = group,
-    })
-  end
-end
+local add_span = ui.view.span
 
 function M.create(input)
   input = input or {}
