@@ -96,50 +96,42 @@ local function gap_text(count)
   return value
 end
 
--- Appends already-normalized sections to a row being built in plain
--- arrays: their text goes into `parts` after index `part_count`, and their
--- highlights go into the flat `highlights` array for `row`, starting at
--- byte column `col`. Returns the new part_count and col. Shared by
--- render() and the tree component's hot loop (no allocation per part).
-function M.append_flat(parts, part_count, highlights, row, col, sections, spacing)
+-- Appends already-normalized sections as text/group pairs to a
+-- proud.ui.view segments array, starting after index `count`; returns the
+-- new count. Shared by render() and the tree component, which emit() the
+-- row in one call.
+function M.append_segments(seg, count, sections, spacing)
   for section_index, section in ipairs(sections) do
     if section_index > 1 then
-      local gap = gap_text(gap_before(spacing, section_index))
-      part_count = part_count + 1
-      parts[part_count] = gap
-      col = col + #gap
+      seg[count + 1] = gap_text(gap_before(spacing, section_index))
+      seg[count + 2] = false
+      count = count + 2
     end
     for _, part in ipairs(section.parts) do
-      local text = part.text
-      part_count = part_count + 1
-      parts[part_count] = text
-      if part.group and text ~= "" then
-        local n = #highlights
-        highlights[n + 1] = row
-        highlights[n + 2] = col
-        highlights[n + 3] = col + #text
-        highlights[n + 4] = part.group
-      end
-      col = col + #text
+      seg[count + 1] = part.text
+      seg[count + 2] = part.group or false
+      count = count + 2
     end
   end
-  return part_count, col
+  return count
 end
 
 -- Renders one row; returns the line and keyed highlights.
 function M.render(sections, spacing)
-  local parts, flat = {}, {}
-  local count = M.append_flat(parts, 0, flat, 0, 0, M.normalize_sections(sections), M.normalize_spacing(spacing))
+  local v = require("proud.ui.view").new()
+  local seg = v:segments()
+  v:emit(seg, M.append_segments(seg, 0, M.normalize_sections(sections), M.normalize_spacing(spacing)))
+  local built = v:build()
   local highlights = {}
-  for index = 1, #flat, 4 do
+  for index = 1, #built.highlights, 4 do
     table.insert(highlights, {
       line = 0,
-      start_col = flat[index + 1],
-      end_col = flat[index + 2],
-      group = flat[index + 3],
+      start_col = built.highlights[index + 1],
+      end_col = built.highlights[index + 2],
+      group = built.highlights[index + 3],
     })
   end
-  return table.concat(parts, "", 1, count), highlights
+  return built.lines[1], highlights
 end
 
 return M

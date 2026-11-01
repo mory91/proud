@@ -1,5 +1,5 @@
 local section_row = require("proud.components.section_row")
-local text = require("proud.ui.text")
+local view = require("proud.ui.view")
 
 local M = {}
 
@@ -236,46 +236,27 @@ function M.row(state, id)
   end
 end
 
+-- Each node is one emit() call: the hot sidebar path keeps a single
+-- compiled loop for all rows (see proud.ui.view emit).
 function M.render(state, width)
-  local lines = {}
-  local highlights = {}
-  local parts = {}
-  local line_count = 0
-  local function render_node(node)
-    local marker = node.marker
-    if marker == nil then
-      marker = expandable(node) and (node.expanded and "▾ " or "▸ ") or "  "
-    end
-    local prefix = spaces(node.depth * 2) .. marker
-    parts[1] = prefix
-    local part_count = section_row.append_flat(parts, 1, highlights, line_count, #prefix, node.sections, node.spacing)
-    local line = table.concat(parts, "", 1, part_count)
-    for index = 1, part_count do
-      parts[index] = nil
-    end
-    if width and width > 0 then
-      line = text.fit(line, width)
-    end
-    line_count = line_count + 1
-    lines[line_count] = line
-  end
-
-  local function walk(nodes, parent_visible)
+  local v = view.new({ width = width and width > 0 and width or nil })
+  local seg = v:segments()
+  local function walk(nodes)
     for _, node in ipairs(nodes or {}) do
-      if parent_visible then
-        render_node(node)
+      local marker = node.marker
+      if marker == nil then
+        marker = expandable(node) and (node.expanded and "▾ " or "▸ ") or "  "
       end
+      seg[1] = spaces(node.depth * 2) .. marker
+      seg[2] = false
+      v:emit(seg, section_row.append_segments(seg, 2, node.sections, node.spacing))
       if node.expanded then
-        walk(node.children, parent_visible)
+        walk(node.children)
       end
     end
   end
-  walk(state.roots, true)
-  return {
-    lines = lines,
-    highlights = highlights,
-    highlight_format = "flat",
-  }
+  walk(state.roots)
+  return v:build()
 end
 
 return M
