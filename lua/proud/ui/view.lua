@@ -235,9 +235,29 @@ function View:row()
   return #self.lines
 end
 
+-- Adds virtual text after the end of `row` (not part of the buffer text).
+-- Stored flat as row, text, group triples.
+function View:eol(row, text, group)
+  local virtual = self.virtual
+  if not virtual then
+    virtual = {}
+    self.virtual = virtual
+  end
+  local n = #virtual
+  virtual[n + 1] = row
+  virtual[n + 2] = text
+  virtual[n + 3] = group or "ProudMuted"
+  return self
+end
+
 function View:build()
   assert(self.open_row == nil, "view line still open")
-  return { lines = self.lines, highlights = self.highlights, highlight_format = "flat" }
+  return {
+    lines = self.lines,
+    highlights = self.highlights,
+    highlight_format = "flat",
+    virtual = self.virtual,
+  }
 end
 
 -- Group of the range covering byte `position` of the source, or nil.

@@ -27,7 +27,6 @@ local definitions = {
 
   next_file = { group = "Single-file review", description = "Select the next file", keys = { "]f" } },
   previous_file = { group = "Single-file review", description = "Select the previous file", keys = { "[f" } },
-  select_file = { group = "Single-file review", description = "Select the focused file", keys = { "<CR>" } },
   next_thread = { group = "Single-file review", description = "Select the next review thread", keys = { "]t" } },
   previous_thread = { group = "Single-file review", description = "Select the previous review thread", keys = { "[t" } },
   reply = { group = "Single-file review", description = "Reply to the selected thread", keys = { "r" } },

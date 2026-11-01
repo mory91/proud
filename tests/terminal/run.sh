@@ -132,7 +132,7 @@ export PROUD_TERM_COLUMNS=100
 run_expect "$ROOT/tests/terminal/filter_header_test.exp" "$LOG_DIR/filter-header.log"
 echo "editable PR filter header OK"
 
-for scene in "browser:2" "overview:2" "single:3" "compare:2" "help:3" "review:2"; do
+for scene in "browser:2" "overview:2" "single:1" "compare:2" "help:3" "review:2"; do
   screen="${scene%%:*}"
   expected="${scene##*:}"
   export PROUD_START="demo"

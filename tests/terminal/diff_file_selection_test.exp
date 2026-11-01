@@ -24,12 +24,11 @@ log_user 1
 spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && ./scripts/run_proud_test_nvim.sh"
 stty rows 40 columns 160
 wait_for {#482 diff.*single} "single file diff workspace"
-send "jj"
-send "\r"
+send "\]f"
 send "\x0c"
-send {:lua local s=require('proud.session').current.state; local pane=s.workspace.panes.code; local code=table.concat(vim.api.nvim_buf_get_lines(pane.buffer,0,-1,false),'\n'); local ok=s.file_cursor==2 and code:find('packages/runner/src/config.ts',1,true)~=nil and code:find('export type RunnerConfig',1,true)~=nil and code:find('retry:',1,true)~=nil; vim.api.nvim_echo({{('FILE_SWITCH_OK='..tostring(ok))}},false,{})}
+send {:lua local s=require('proud.session').current.state; local pane=s.workspace.panes.code; local code=table.concat(vim.api.nvim_buf_get_lines(pane.buffer,0,-1,false),'\n'); local ok=s.file_cursor==2 and (vim.wo[pane.window].winbar or ''):find('packages/runner/src/config.ts',1,true)~=nil and code:find('export type RunnerConfig',1,true)~=nil and code:find('retry:',1,true)~=nil; vim.api.nvim_echo({{('FILE_SWITCH_OK='..tostring(ok))}},false,{})}
 send "\r"
-wait_for {FILE_SWITCH_OK=true} "Enter selects the focused diff file"
+wait_for {FILE_SWITCH_OK=true} "]f switches to the next diff file"
 sleep 1
 send ":qa!\r"
 expect eof

@@ -3,40 +3,44 @@ return function(test)
   local fixtures = require("proud.fixtures")
   local state = feature.create(fixtures.overview, fixtures.threads, fixtures.patch, fixtures.file_sources)
   local buffer = feature.open(state)
-  local function rule_width(pane, row)
-    local line = vim.api.nvim_buf_get_lines(state.workspace.panes[pane].buffer, row, row + 1, false)[1] or ""
-    return vim.fn.strdisplaywidth(line), vim.api.nvim_win_get_width(state.workspace.panes[pane].window)
-  end
-  local code_rule, code_width = rule_width("code", 2)
-  test.eq(code_width, code_rule, "the code pane rule spans the pane width")
+  local code = state.workspace.panes.code
+  test.eq(1, #state.workspace.order, "the single-pane diff has one pane")
+  test.contains(vim.wo[code.window].winbar, "feat/task-retry-backoff", "the window bar shows the head branch")
+  test.contains(vim.wo[code.window].winbar, "packages/runner/src/task/retry.ts", "the window bar shows the file")
+  test.contains(vim.b[code.buffer].proud_title, "diff · single-pane", "the scene title names the single-pane mode")
+  test.truthy(vim.wo[code.window].cursorline, "the cursor row is highlighted")
+  local cursor_marks = vim.api.nvim_buf_get_extmarks(code.buffer, vim.api.nvim_create_namespace("proud_diff_cursor"), 0, -1, { details = true })
+  test.eq(1, #cursor_marks, "the cursor row's line numbers are emphasized")
   vim.o.columns = math.max(80, vim.o.columns - 20)
   vim.api.nvim_exec_autocmds("VimResized", {})
-  code_rule, code_width = rule_width("code", 2)
-  test.eq(code_width, code_rule, "the code pane rule follows a resize")
+  test.contains(vim.wo[code.window].winbar, "retry.ts", "the window bar survives a resize")
   vim.o.columns = vim.o.columns + 20
   vim.api.nvim_exec_autocmds("VimResized", {})
   vim.api.nvim_feedkeys("]f", "x", false)
   test.eq(2, state.file_cursor, "]f advances to the next file")
+  test.contains(vim.wo[code.window].winbar, "2 / ", "the window bar follows the file")
   vim.api.nvim_feedkeys("[f", "x", false)
   test.eq(1, state.file_cursor, "[f returns to the previous file")
-  vim.api.nvim_win_set_cursor(state.workspace.panes.files.window, { 3, 0 })
-  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
-  test.eq(2, state.file_cursor, "<CR> selects the focused file row")
+  vim.api.nvim_feedkeys("]t", "x", false)
+  test.eq(2, state.thread_cursor, "]t selects the next thread")
+  test.eq(2, state.file_cursor, "]t switches to the thread's file")
   test.contains(
-    table.concat(vim.api.nvim_buf_get_lines(state.workspace.panes.code.buffer, 0, -1, false), "\n"),
+    table.concat(vim.api.nvim_buf_get_lines(code.buffer, 0, -1, false), "\n"),
     "export type RunnerConfig"
   )
-  vim.api.nvim_feedkeys("]t", "x", false)
+  local cursor_row = vim.api.nvim_win_get_cursor(code.window)[1]
+  local cursor_line = vim.api.nvim_buf_get_lines(code.buffer, cursor_row - 1, cursor_row, false)[1]
+  test.eq("   6", cursor_line:sub(6, 9), "]t puts the cursor on the thread's line")
   vim.api.nvim_feedkeys("R", "x", false)
-  test.eq(2, state.thread_cursor)
   test.truthy(state.threads[2].resolved)
-  test.contains(
-    table.concat(vim.api.nvim_buf_get_lines(state.workspace.panes.thread.buffer, 0, -1, false), "\n"),
-    "◇"
-  )
-  test.eq(3, #state.workspace.order, "single diff uses files, code, and thread panes")
-  test.truthy(state.workspace.panes.files.buffer ~= state.workspace.panes.code.buffer)
-  test.truthy(state.workspace.panes.code.buffer ~= state.workspace.panes.thread.buffer)
+  local resolved_preview = false
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(code.buffer, -1, 0, -1, { details = true })) do
+    local chunks = mark[4].virt_text
+    if chunks and chunks[1][1]:find("◇ resolved", 1, true) then
+      resolved_preview = true
+    end
+  end
+  test.truthy(resolved_preview, "resolving updates the end-of-line preview")
   vim.cmd("silent! tabclose!")
 
   local session = require("proud.session")

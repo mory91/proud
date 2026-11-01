@@ -46,19 +46,13 @@ local expectations = {
     { pane = "details", needle = "change requested", group = "ProudWarning" },
   },
   single = {
-    { pane = "code", needle = "main →", group = "ProudAccentText" },
-    { pane = "code", needle = "retry.ts", group = "ProudBright" },
-    { pane = "code", needle = "+6", group = "ProudSuccessText" },
-    { pane = "code", needle = "-2", group = "ProudDangerText" },
+    { pane = "winbar", needle = "main", group = "ProudAccentText" },
+    { pane = "winbar", needle = "feat/task-retry-backoff", group = "ProudSuccessText" },
+    { pane = "winbar", needle = "packages/runner/src/task/retry.ts", group = "ProudMuted" },
+    { pane = "winbar", needle = "[+", group = "ProudAccentText" },
     { pane = "code", needle = "const delay", group = "ProudAdd" },
     { pane = "code", needle = "await sleep(1000)", group = "ProudDelete" },
     { pane = "code", needle = "◆", group = "ProudWarning" },
-    { pane = "files", needle = "Files", group = "ProudAccentText" },
-    { pane = "files", needle = "M retry.ts", group = "ProudAccentText" },
-    { pane = "files", needle = "▌", group = "ProudAccent" },
-    { pane = "thread", needle = "Thread", group = "ProudWarning" },
-    { pane = "thread", needle = "dev-lee", group = "ProudAccentText" },
-    { pane = "thread", needle = "Reply as you", group = "ProudMuted" },
   },
   compare = {
     { pane = "summary", needle = "Compare", group = "ProudAccentText" },
@@ -110,7 +104,26 @@ local function covers(mark, row, column)
   return mark[2] == row and start_col <= column and end_col > column
 end
 
+-- True when the code window's 'winbar' shows `needle` inside a segment
+-- drawn with `group` ("%#Group#text").
+local function winbar_has(needle, group)
+  local pane = workspace and workspace.panes and workspace.panes.code
+  if not pane or not vim.api.nvim_win_is_valid(pane.window) then
+    return false
+  end
+  local bar = vim.wo[pane.window].winbar or ""
+  for segment_group, text in bar:gmatch("%%#([%w_]+)#([^%%]*)") do
+    if segment_group == group and text:find(needle, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
 local function has_group(pane_name, needle, group)
+  if pane_name == "winbar" then
+    return winbar_has(needle, group)
+  end
   local pane = workspace and workspace.panes and workspace.panes[pane_name]
   if not pane then
     return false

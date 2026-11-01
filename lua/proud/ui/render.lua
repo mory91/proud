@@ -78,6 +78,16 @@ function M.render(buffer, view, options)
       set_mark(buffer, lines, row, item.start_col or 0, item.end_col or #line, item.group)
     end
   end
+  local virtual = view.virtual or {}
+  for index = 1, #virtual, 3 do
+    local row = virtual[index] + offset
+    if row < #lines then
+      vim.api.nvim_buf_set_extmark(buffer, namespace, row, 0, {
+        virt_text = { { virtual[index + 1], virtual[index + 2] } },
+        virt_text_pos = "eol",
+      })
+    end
+  end
   vim.bo[buffer].modifiable = false
 end
 
