@@ -69,4 +69,26 @@ return function(test)
   local merged = ui.view.new()
   merged:line({ "ab", "G" }, { "cd", "G" })
   test.eq(4, #merged:build().highlights, "touching same-group chunks merge into one highlight")
+
+  local ev = ui.view.new({ width = 12 })
+  local seg = ev:segments()
+  test.truthy(seg == ev:segments(), "segments reuses one scratch array")
+  seg[1], seg[2] = "ab", "A"
+  seg[3], seg[4] = "-", false
+  seg[5], seg[6] = "cd", "C"
+  seg[7], seg[8] = "ef", "C"
+  test.eq(0, ev:emit(seg, 8, "Fill"), "emit returns its row")
+  seg[1], seg[2] = "0123456789abcdef", "Long"
+  ev:emit(seg, 2)
+  ev:emit(seg, 0)
+  local evb = ev:build()
+  test.eq("ab-cdef     ", evb.lines[1], "emit joins segments and fits to the width")
+  test.eq("Fill", evb.highlights[4], "emit records the fill first")
+  test.eq(12, evb.highlights[3], "the fill is clipped to the line")
+  test.eq(0, evb.highlights[6], "first segment starts at column 0")
+  test.eq(3, evb.highlights[10], "plain segments advance the column")
+  test.eq(7, evb.highlights[11], "touching same-group segments merge")
+  test.eq("0123456789ab", evb.lines[2], "emit clips long rows to the width")
+  test.eq(12, evb.highlights[15], "highlights on a clipped row are clipped")
+  test.eq(string.rep(" ", 12), evb.lines[3], "an empty emit is a blank row")
 end
