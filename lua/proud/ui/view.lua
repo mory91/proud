@@ -141,6 +141,73 @@ function View:spans(...)
   return self:close()
 end
 
+-- Reusable scratch array for emit(): text/group pairs, one row at a time.
+function View:segments()
+  local seg = self.seg
+  if not seg then
+    seg = {}
+    self.seg = seg
+  end
+  return seg
+end
+
+-- Appends one row from seg[1..count] (text, group, text, group, ...),
+-- optionally filled with `fill` underneath. Texts must be strings. The
+-- loop appends inline (no add() call) to keep compiled code small.
+function View:emit(seg, count, fill)
+  assert(self.open_row == nil, "view line already open")
+  local row = #self.lines
+  local highlights = self.highlights
+  local n = #highlights
+  if fill then
+    highlights[n + 1] = row
+    highlights[n + 2] = 0
+    highlights[n + 3] = math.huge
+    highlights[n + 4] = fill
+    n = n + 4
+  end
+  local parts = self.parts
+  local part_count = 0
+  local col = 0
+  for index = 1, count, 2 do
+    local text, group = seg[index], seg[index + 1]
+    local length = #text
+    if length > 0 then
+      part_count = part_count + 1
+      parts[part_count] = text
+      if group then
+        if n >= 4 and highlights[n - 3] == row and highlights[n - 1] == col and highlights[n] == group then
+          highlights[n - 1] = col + length
+        else
+          highlights[n + 1] = row
+          highlights[n + 2] = col
+          highlights[n + 3] = col + length
+          highlights[n + 4] = group
+          n = n + 4
+        end
+      end
+      col = col + length
+    end
+  end
+  local line
+  if part_count == 1 then
+    line = parts[1]
+  else
+    line = table.concat(parts, "", 1, part_count)
+  end
+  for index = 1, part_count do
+    parts[index] = nil
+  end
+  if self.width then
+    line = ui_text.fit(line, self.width)
+  end
+  if fill or #line < col then
+    clip_row(highlights, row, #line)
+  end
+  self.lines[row + 1] = line
+  return row
+end
+
 function View:blank()
   return self:line()
 end

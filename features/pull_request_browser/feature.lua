@@ -314,33 +314,18 @@ local function layout_widths(width)
   return left_width, math.max(10, terminal_width - left_width - 2)
 end
 
-local function push_flat(highlights, row, start_col, end_col, group)
-  table.insert(highlights, row)
-  table.insert(highlights, start_col)
-  table.insert(highlights, end_col)
-  table.insert(highlights, group)
+local function add_title_row(v, pull, selected)
+  local seg = v:segments()
+  seg[1], seg[2] = selected and cursor_rail or " ", selected and "ProudAccentText" or false
+  seg[3], seg[4] = "●", status_highlight(pull)
+  seg[5], seg[6] = " ", false
+  seg[7], seg[8] = "#" .. safe_text(pull.number, "0"), "ProudAccentText"
+  seg[9], seg[10] = " ", false
+  seg[11], seg[12] = safe_text(pull.title, "Untitled pull request"), "ProudBright"
+  v:emit(seg, 12, selected and "ProudSelection" or nil)
 end
 
-local function add_title_row(lines, highlights, pull, width, selected)
-  local prefix = selected and cursor_rail or " "
-  local number = "#" .. safe_text(pull.number, "0")
-  local title = safe_text(pull.title, "Untitled pull request")
-  local line = fit(prefix .. "● " .. number .. " " .. title, width)
-  local row = #lines
-  table.insert(lines, line)
-  if selected then
-    push_flat(highlights, row, 0, #line, "ProudSelection")
-    push_flat(highlights, row, 0, math.min(#prefix, #line), "ProudAccentText")
-  end
-  local circle_start = #prefix
-  local number_start = circle_start + #"● "
-  local title_start = number_start + #number + 1
-  push_flat(highlights, row, circle_start, math.min(circle_start + #"●", #line), status_highlight(pull))
-  push_flat(highlights, row, number_start, math.min(number_start + #number, #line), "ProudAccentText")
-  push_flat(highlights, row, title_start, math.min(title_start + #title, #line), "ProudBright")
-end
-
-local function add_subtitle_row(lines, highlights, pull, width, selected)
+local function add_subtitle_row(v, pull, width, selected)
   local author = pull_author(pull)
   local age = safe_text(pull.age, "now")
   local additions = math.max(0, math.floor(safe_number(pull.additions, 0)))
@@ -364,82 +349,49 @@ local function add_subtitle_row(lines, highlights, pull, width, selected)
   if display_width(author) > author_width then
     author = fit(author, author_width):gsub("%s+$", "")
   end
-  local prefix = selected and cursor_rail or " "
-  local line = fit(
-    prefix
-      .. author
-      .. separator
-      .. age
-      .. separator
-      .. addition_label
-      .. deletion_label
-      .. separator
-      .. thread_label
-      .. separator
-      .. decision_label,
-    width
-  )
-  local row = #lines
-  table.insert(lines, line)
-  if selected then
-    push_flat(highlights, row, 0, #line, "ProudSelection")
-    push_flat(highlights, row, 0, math.min(#prefix, #line), "ProudAccentText")
-  end
-  local offset = #prefix
-  push_flat(highlights, row, offset, math.min(offset + #author, #line), "ProudMuted")
-  offset = offset + #author + #separator
-  push_flat(highlights, row, offset, math.min(offset + #age, #line), "ProudMuted")
-  offset = offset + #age + #separator
-  push_flat(highlights, row, offset, math.min(offset + #addition_label, #line), "ProudSuccessText")
-  offset = offset + #addition_label
-  push_flat(highlights, row, offset, math.min(offset + #deletion_label, #line), "ProudDangerText")
-  offset = offset + #deletion_label + #separator
-  push_flat(highlights, row, offset, math.min(offset + #thread_label, #line), "ProudWarning")
-  offset = offset + #thread_label + #separator
-  push_flat(highlights, row, offset, math.min(offset + #decision_label, #line), decision_highlights[decision] or "ProudAccentText")
+  local seg = v:segments()
+  seg[1], seg[2] = selected and cursor_rail or " ", selected and "ProudAccentText" or false
+  seg[3], seg[4] = author, "ProudMuted"
+  seg[5], seg[6] = separator, false
+  seg[7], seg[8] = age, "ProudMuted"
+  seg[9], seg[10] = separator, false
+  seg[11], seg[12] = addition_label, "ProudSuccessText"
+  seg[13], seg[14] = deletion_label, "ProudDangerText"
+  seg[15], seg[16] = separator, false
+  seg[17], seg[18] = thread_label, "ProudWarning"
+  seg[19], seg[20] = separator, false
+  seg[21], seg[22] = decision_label, decision_highlights[decision] or "ProudAccentText"
+  v:emit(seg, 22, selected and "ProudSelection" or nil)
 end
 
 function M.render_list(state, options)
   options = options or {}
   local width = math.max(10, math.floor(options.width or layout_widths(vim.o.columns)))
-  local lines = {}
-  local highlights = {}
-  local function add(value)
-    table.insert(lines, fit(value, width))
-  end
+  local v = ui.view.new({ width = width })
+  local seg = v:segments()
   for row = 1, math.max(16, #state.filtered * 2) do
     local pull_index = math.ceil(row / 2)
     local pull = state.filtered[pull_index]
-    local left = ""
-    if pull then
-      local item_row = (row - 1) % 2 + 1
-      if item_row == 1 then
-        add_title_row(lines, highlights, pull, width, pull_index == state.cursor)
-      else
-        add_subtitle_row(lines, highlights, pull, width, pull_index == state.cursor)
-      end
+    if not pull then
+      v:emit(seg, 0)
+    elseif (row - 1) % 2 == 0 then
+      add_title_row(v, pull, pull_index == state.cursor)
     else
-      add(fit(left, width))
+      add_subtitle_row(v, pull, width, pull_index == state.cursor)
     end
   end
-
-  add("")
-  -- Footer columns are computed from the text, like the rows above.
-  local function mark(row, start_col, text, group)
-    local line = lines[row + 1]
-    if start_col < #line then
-      push_flat(highlights, row, start_col, math.min(start_col + #text, #line), group)
-    end
-  end
-  local open_prefix, open_target = "Select a pull request", "review overview"
-  add(open_prefix .. " to open its " .. open_target .. ".")
-  mark(#lines - 1, 0, open_prefix, "ProudAccentText")
-  mark(#lines - 1, #open_prefix + #" to open its ", open_target, "ProudSuccessText")
-  local visible = "Visible " .. #state.filtered .. "  ·  "
-  add(visible .. "Source " .. state.source)
-  mark(#lines - 1, 0, "Visible", "ProudMuted")
-  mark(#lines - 1, #visible, "Source", "ProudMuted")
-  return { lines = lines, highlights = highlights, highlight_format = "flat" }
+  v:emit(seg, 0)
+  seg[1], seg[2] = "Select a pull request", "ProudAccentText"
+  seg[3], seg[4] = " to open its ", false
+  seg[5], seg[6] = "review overview", "ProudSuccessText"
+  seg[7], seg[8] = ".", false
+  v:emit(seg, 8)
+  seg[1], seg[2] = "Visible", "ProudMuted"
+  seg[3], seg[4] = " " .. #state.filtered .. "  ·  ", false
+  seg[5], seg[6] = "Source", "ProudMuted"
+  seg[7], seg[8] = " " .. state.source, false
+  v:emit(seg, 8)
+  return v:build()
 end
 
 function M.render_preview(state, options)
