@@ -1,32 +1,68 @@
 return function(test)
   local feature = require("proud.loader").load("single_diff_threads")
   local fixtures = require("proud.fixtures")
-  local state = feature.create(fixtures.overview, fixtures.threads, fixtures.patch, fixtures.file_sources)
-  local placeholder = feature.create({ number = 902 }, {}, nil, {})
-  placeholder.loading = true
-  test.contains(feature.render_code(placeholder).lines[1], "Loading diff", "diff placeholder renders before patch data")
-  feature.hydrate(placeholder, { pull = fixtures.overview })
-  test.truthy(placeholder.loading, "pull hydration leaves the diff loading until its patch arrives")
-  feature.hydrate(placeholder, { patch = fixtures.patch })
-  test.truthy(not placeholder.loading, "patch hydration clears diff loading")
-  feature.hydrate(placeholder, { threads = fixtures.threads })
-  test.eq(2, #placeholder.threads, "threads hydrate independently without rebuilding the scene")
-  local rendered = table.concat(feature.render_code(state).lines, "\n")
-  test.contains(rendered, "export interface RetryConfig")
-  test.contains(rendered, "throw new Error(\"retry exhausted\")")
-  test.contains(rendered, "await sleep(1000)")
-  test.contains(rendered, "const delay = baseDelayMs * 2 ** (attempt - 1)")
-  local panes = feature.render_panes(state)
-  test.highlighted(panes.code, "main →", "ProudAccentText", "diff direction is accented")
-  test.highlighted(panes.code, "await sleep(1000)", "ProudDelete", "deleted source is danger-colored")
-  test.highlighted(panes.code, "const delay", "ProudAdd", "added source is success-colored")
-  test.highlighted(panes.thread, "Thread", "ProudWarning", "open threads use warning color")
-  test.highlighted(panes.thread, "dev-lee", "ProudAccentText", "comment authors are accented")
+  local state = feature.create(fixtures.overview, fixtures.threads, { cwd = "/tmp/repo" })
+  test.eq("loading", state.status, "a new diff starts loading")
+  test.eq("/tmp/repo", state.cwd, "the repository directory is kept")
+  test.eq("#482 diff · single-pane", feature.title(state), "the scene is titled for single-pane mode")
+
+  local loading_bar = feature.winbar(state)
+  test.eq("main", loading_bar[1][1], "the window bar starts with the base branch")
+  test.eq("ProudSuccessText", loading_bar[3][2], "the head branch is green")
+  test.contains(loading_bar[4][1], "loading", "the window bar shows loading before checkout")
+  test.contains(table.concat(feature.status_view(state).lines, "\n"), "Checking out feat/task-retry-backoff", "loading names the branch being checked out")
+
+  state.status = "error"
+  state.error = "git checkout feat/task-retry-backoff\nerror: Your local changes to the following files would be overwritten by checkout"
+  local error_view = feature.status_view(state)
+  test.highlighted(error_view, "Could not open the diff", "ProudDangerText", "errors are headed in the danger color")
+  test.contains(table.concat(error_view.lines, "\n"), "would be overwritten by checkout", "git's message is shown verbatim")
+  test.contains(feature.winbar(state)[4][1], "could not open", "the window bar reports the error")
+
+  state.status = "ready"
+  state.files = {
+    { status = "M", path = "packages/runner/src/task/retry.ts" },
+    { status = "A", path = "packages/runner/src/config.ts" },
+  }
+  state.file_cursor = 2
+  local bar = feature.winbar(state, { added = 5, deleted = 1 })
+  test.contains(bar[4][1], "packages/runner/src/config.ts", "the window bar shows the file path")
+  test.eq("[+5 −1]", bar[5][1], "the window bar shows live change counts")
+  test.contains(bar[6][1], "2 / 2", "the window bar shows the file position")
+
+  test.contains(feature.thread_preview(state.threads[1]), "◆ dev-lee: attempt is already", "open threads preview their first comment")
+  test.truthy(#feature.thread_preview(state.threads[1]) < 60, "previews are shortened")
+  local resolved = vim.deepcopy(state.threads[1])
+  resolved.resolved = true
+  test.eq("   ◇ resolved", feature.thread_preview(resolved), "resolved threads preview as resolved")
+
+  local thread_view = feature.render_thread(state)
+  test.highlighted(thread_view, "Thread", "ProudWarning", "open threads use warning color")
+  test.highlighted(thread_view, "dev-lee", "ProudAccentText", "comment authors are accented")
   test.truthy(feature.add_reply(state, "Please add a cap."))
   test.eq(3, #state.threads[1].comments)
   feature.next_thread(state, 1)
   test.eq(2, state.thread_cursor)
   test.truthy(feature.resolve(state))
   test.truthy(state.threads[2].resolved)
-  test.contains(table.concat(feature.render(state).lines, "\n"), "resolved")
+
+  local inline = require("proud.ui.inline_diff")
+  local buffer = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buffer, 0, -1, false, { "a", "B", "c", "d" })
+  local stats = inline.decorate(buffer, "x\na\nb\nc\ny\n", { "x", "a", "b", "c", "y" }, 8)
+  test.eq(2, stats.added, "inline diff counts added and changed lines")
+  test.eq(3, stats.deleted, "inline diff counts deleted lines")
+  local above_first, changed_old
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(buffer, inline.namespace, 0, -1, { details = true })) do
+    local detail = mark[4]
+    if detail.virt_lines and mark[2] == 0 and detail.virt_lines_above then
+      above_first = vim.trim(detail.virt_lines[1][1][1])
+    end
+    if detail.virt_lines and mark[2] == 1 then
+      changed_old = vim.trim(detail.virt_lines[1][1][1])
+    end
+  end
+  test.eq("x", above_first, "a deleted first line is shown above line 1")
+  test.eq("b", changed_old, "a changed line shows its old text above the new one")
+  vim.api.nvim_buf_delete(buffer, { force = true })
 end

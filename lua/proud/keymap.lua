@@ -140,6 +140,17 @@ function M.map(buffer, mode, action, callback, description)
   end
 end
 
+-- Removes an action's buffer-local mappings (used on real file buffers
+-- when a scene stops using them).
+function M.unmap(buffer, mode, action)
+  if not vim.api.nvim_buf_is_valid(buffer) then
+    return
+  end
+  for _, lhs in ipairs(M.keys(action)) do
+    pcall(vim.keymap.del, mode, lhs, { buffer = buffer })
+  end
+end
+
 local function has_action_map(buffer, mode, action)
   for _, lhs in ipairs(M.keys(action)) do
     local raw_lhs = vim.api.nvim_replace_termcodes(lhs, true, false, true)

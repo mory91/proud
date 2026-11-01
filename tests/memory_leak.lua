@@ -69,12 +69,23 @@ local scenarios = {
     end,
   },
   single = {
+    -- The editable diff shows real files, where q means macro recording,
+    -- so the scene is closed through its own close function after the
+    -- checkout has finished.
     open = function()
       session.demo("single")
+      local state = session.current.state
+      vim.wait(15000, function()
+        return state.status ~= "loading"
+          and (state.status ~= "ready" or next(state.scene.handles) ~= nil)
+      end, 10)
       return session.current
     end,
-    close = function()
-      close_with_key("q")
+    close = function(handle)
+      handle.state.close()
+      vim.wait(1000, function()
+        return handle.state.scene.lifecycle.closed()
+      end, 10)
     end,
   },
   compare = {

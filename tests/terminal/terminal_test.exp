@@ -50,15 +50,12 @@ command "\r" {#479 overview} "pull request overview"
 command "v\x0c:lua vim.env.PROUD_SIDEBAR_MODE='viewed'; dofile(vim.env.PROUD_ROOT..'/tests/terminal/sidebar_assert.lua')\r" {SIDEBAR_VIEWED_OK=true} "overview viewed state"
 
 command ":Proud demo single\r\x0c" {#482 diff.*single} "single file diff"
-command "\]f\x0c" {config\.ts} "file diff file navigation"
+command ":lua local s=require('proud.session').current.state; vim.wait(15000,function() return s.status~='loading' and next(s.scene.handles)~=nil end,20); vim.api.nvim_echo({{'DIFF_READY='..s.status}},false,{})\r" {DIFF_READY=ready} "editable diff loaded"
+command "\]f\x0c" {retry\.ts} "file diff file navigation"
 command "\]t\x0c" {#482 diff.*single} "thread navigation refresh"
 send {:lua local s=require('proud.session').current.state; local ok=s.thread_cursor==2 and s.threads[2].path=='packages/runner/src/config.ts'; vim.api.nvim_echo({{('THREAD_OK='..tostring(ok))}},false,{})}
 send "\r"
 wait_for {THREAD_OK=true} "thread cursor moved to config.ts"
-command "R\x0c" {#482 diff.*single} "thread resolution refresh"
-send {:lua local s=require('proud.session').current.state; local ok=s.threads[2].resolved; vim.api.nvim_echo({{('RESOLVE_OK='..tostring(ok))}},false,{})}
-send "\r"
-wait_for {RESOLVE_OK=true} "thread resolution state"
 
 command ":Proud demo compare\r\x0c" {Compare[^\r\n]*merge base} "branch compare"
 command "S\x0c" {base[^\r\n]*feat/monitor-diffs[^\r\n]*head[^\r\n]*main} "branch swap"

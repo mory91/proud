@@ -101,7 +101,7 @@ Every feature is self-contained in `features/<feature>/` with:
 | `github_credentials` | Centered credential modal, validation, secure persistence, and reuse |
 | `pull_request_browser` | Query, preview, and open pull requests |
 | `pull_request_overview` | Description, files, commits, checks, and conversation |
-| `single_diff_threads` | Full-file inline diff, replies, drafts, and resolution |
+| `single_diff_threads` | Editable live diff on the checked-out PR branch, with thread signs |
 | `review_submission` | Comment, approve, and request-changes review submission |
 | `branch_compare` | Offline two-dot and three-dot Git comparison |
 | `keymap_help` | Remappable key and command reference |
@@ -145,7 +145,7 @@ This runs the latest working-tree plugin with a separate `test-env/nvim/bin/nvim
 | Pull request source debounce | 200 rapid source changes | 2 ms | 256 KiB |
 | Sidebar movement | 500 expanded nodes via attached `j`/`k` handler | 0.5 ms | 64 KiB |
 | Pull request overview | 200 files + 250 body lines | 4 ms | 768 KiB |
-| Single diff and threads | 1,200-file lines + 1,000 threads | 8 ms | 2 MiB |
+| Editable live diff | 1,200-line file, 600 changed lines + 1,000 threads | 8 ms | 2 MiB |
 | Branch compare | 100 commits + 500 files | 3 ms | 512 KiB |
 | Keymap help | 80 mappings | 1 ms | 128 KiB |
 

@@ -6,22 +6,6 @@ local M = {
   credentials_ready = false,
 }
 
-local function read_file_source(path, ref)
-  local cwd = M.options and M.options.cwd or vim.fn.getcwd()
-  local refs = {}
-  if ref and ref ~= "" then
-    table.insert(refs, ref)
-  end
-  table.insert(refs, "HEAD")
-  for _, source_ref in ipairs(refs) do
-    local completed = vim.system({ "git", "-C", cwd, "show", source_ref .. ":" .. path }, { text = true }):wait()
-    if completed.code == 0 and completed.stdout and completed.stdout ~= "" then
-      return vim.split((completed.stdout:gsub("\n$", "")), "\n", { plain = true })
-    end
-  end
-  return nil
-end
-
 local function fail(message)
   vim.notify(message, vim.log.levels.ERROR, { title = "proud" })
 end
@@ -116,8 +100,8 @@ function M.open_overview(number)
     local feature = loader.load("pull_request_overview")
     local state = feature.create({ number = number, title = "Pull request #" .. tostring(number) }, { loading = true })
     local buffer = feature.open(state, {
-      on_diff = function()
-        M.open_diff(number, "single")
+      on_diff = function(path)
+        M.open_diff(number, path)
       end,
       on_review = function()
         M.open_review(state.pull)
@@ -141,60 +125,36 @@ function M.open_overview(number)
   end)
 end
 
-function M.open_diff(number)
+-- Opens the editable diff: checks out the PR branch in place and shows its
+-- changed files (starting with `path` when given). Threads hydrate
+-- independently. Git errors are shown in the scene as git reports them.
+function M.open_diff(number, path)
   with_credentials(function()
     local name = "single_diff_threads"
     local feature = loader.load(name)
-    local state = feature.create({ number = number, title = "Pull request #" .. tostring(number) }, {}, nil, {})
-    state.loading = true
+    local state = feature.create({ number = number, title = "Pull request #" .. tostring(number) }, {})
     local buffer = feature.open(state, {
-      load_source = function(path)
-        return read_file_source(path, state.pull.head_sha)
-      end,
+      cwd = M.options and M.options.cwd or vim.fn.getcwd(),
+      load = false,
     })
     M.current = { feature = name, state = state, buffer = buffer }
     M.provider:list_threads(number, function(thread_ok, threads)
-      if not is_current(state) then
-        return
+      if M.current and M.current.state == state then
+        feature.hydrate(state, { threads = thread_ok and threads or {} })
       end
-      feature.hydrate(state, { threads = thread_ok and threads or {} })
     end)
     M.provider:get_pull_request(number, function(ok, pull)
-      if not is_current(state) then
+      if not (M.current and M.current.state == state) then
         return
       end
       if not ok then
-        state.loading = false
-        if state.refresh then
-          state.refresh()
-        end
+        state.status = "error"
+        state.error = pull.message
         fail(pull.message)
         return
       end
-      local source_ref = pull.head_sha
-        or pull.headRefOid
-        or (pull.commits and pull.commits[#pull.commits] and pull.commits[#pull.commits].sha)
-        or pull.head_ref
-      local sources = {}
-      local first_path = pull.files and pull.files[1] and pull.files[1].path
-      if first_path then
-        sources[first_path] = read_file_source(first_path, source_ref)
-      end
-      feature.hydrate(state, { pull = pull, sources = sources })
-      M.provider:get_patch(number, function(patch_ok, patch)
-        if not is_current(state) then
-          return
-        end
-        if not patch_ok then
-          state.loading = false
-          if state.refresh then
-            state.refresh()
-          end
-          fail(patch.message)
-          return
-        end
-        feature.hydrate(state, { patch = patch })
-      end, pull)
+      feature.hydrate(state, { pull = pull })
+      feature.load(state, { path = path })
     end)
   end)
 end
@@ -331,10 +291,24 @@ function M.demo(screen)
     return
   end
   if screen == "single" then
+    -- The editable diff needs a real repository: build one from the
+    -- fixtures (base branch, PR branch, local origin) and remove it on exit.
+    local fixture_repo = require("proud.fixture_repo")
+    if not (M.demo_repo and vim.uv.fs_stat(M.demo_repo.work)) then
+      local repo = fixture_repo.create()
+      M.demo_repo = repo
+      vim.api.nvim_create_autocmd("VimLeavePre", {
+        once = true,
+        callback = function()
+          fixture_repo.remove(repo)
+        end,
+      })
+    end
+    local repo = M.demo_repo
     local feature = loader.load("single_diff_threads")
-    local state = feature.create(fixtures.overview, fixtures.threads, fixtures.patch, fixtures.file_sources)
+    local state = feature.create(fixtures.overview, fixtures.threads, { cwd = repo.work })
     local buffer = feature.open(state)
-    M.current = { feature = "single_diff_threads", state = state, buffer = buffer }
+    M.current = { feature = "single_diff_threads", state = state, buffer = buffer, repo = repo }
     return
   end
   if screen == "compare" then

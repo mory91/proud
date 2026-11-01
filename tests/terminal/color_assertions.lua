@@ -46,19 +46,12 @@ local expectations = {
     { pane = "details", needle = "change requested", group = "ProudWarning" },
   },
   single = {
-    { pane = "code", needle = "main →", group = "ProudAccentText" },
-    { pane = "code", needle = "retry.ts", group = "ProudBright" },
-    { pane = "code", needle = "+6", group = "ProudSuccessText" },
-    { pane = "code", needle = "-2", group = "ProudDangerText" },
-    { pane = "code", needle = "const delay", group = "ProudAdd" },
-    { pane = "code", needle = "await sleep(1000)", group = "ProudDelete" },
-    { pane = "code", needle = "◆", group = "ProudWarning" },
-    { pane = "files", needle = "Files", group = "ProudAccentText" },
-    { pane = "files", needle = "M retry.ts", group = "ProudAccentText" },
-    { pane = "files", needle = "▌", group = "ProudAccent" },
-    { pane = "thread", needle = "Thread", group = "ProudWarning" },
-    { pane = "thread", needle = "dev-lee", group = "ProudAccentText" },
-    { pane = "thread", needle = "Reply as you", group = "ProudMuted" },
+    { pane = "winbar", needle = "main", group = "ProudAccentText" },
+    { pane = "winbar", needle = "feat/task-retry-backoff", group = "ProudSuccessText" },
+    { pane = "winbar", needle = "packages/runner/src/config.ts", group = "ProudMuted" },
+    { pane = "winbar", needle = "[+", group = "ProudAccentText" },
+    { pane = "line", needle = "maxDelayMs: number", group = "ProudAdd" },
+    { pane = "sign", needle = "◆", group = "ProudWarning" },
   },
   compare = {
     { pane = "summary", needle = "Compare", group = "ProudAccentText" },
@@ -100,6 +93,18 @@ local expectations = {
 
 local state = scene == "help" and session.help or session.current and session.current.state
 local workspace = state and (state.workspace or state.surface)
+if not workspace and state and state.scene then
+  -- The editable diff is a scene showing a real file: wait for the
+  -- checkout, then treat its window as a one-pane workspace.
+  vim.wait(15000, function()
+    return state.status ~= "loading" and (state.status ~= "ready" or next(state.scene.handles) ~= nil)
+  end, 20)
+  workspace = {
+    panes = {
+      code = { buffer = vim.api.nvim_win_get_buf(state.scene.window), window = state.scene.window },
+    },
+  }
+end
 local namespace = vim.api.nvim_get_namespaces().proud
 local card_namespace = vim.api.nvim_get_namespaces().proud_conversation_cards
 
@@ -110,7 +115,64 @@ local function covers(mark, row, column)
   return mark[2] == row and start_col <= column and end_col > column
 end
 
+-- True when the code window's 'winbar' shows `needle` inside a segment
+-- drawn with `group` ("%#Group#text").
+local function winbar_has(needle, group)
+  local pane = workspace and workspace.panes and workspace.panes.code
+  if not pane or not vim.api.nvim_win_is_valid(pane.window) then
+    return false
+  end
+  local bar = vim.wo[pane.window].winbar or ""
+  for segment_group, text in bar:gmatch("%%#([%w_]+)#([^%%]*)") do
+    if segment_group == group and text:find(needle, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
+-- Editable diff: a whole-line highlight (inline diff) on the line with
+-- `needle`, or a thread sign `needle` drawn with `group`.
+local function line_has(needle, group)
+  local pane = workspace and workspace.panes and workspace.panes.code
+  local inline = vim.api.nvim_get_namespaces().proud_inline_diff
+  if not pane or not inline then
+    return false
+  end
+  for row, line in ipairs(vim.api.nvim_buf_get_lines(pane.buffer, 0, -1, false)) do
+    if line:find(needle, 1, true) then
+      for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(pane.buffer, inline, { row - 1, 0 }, { row - 1, -1 }, { details = true })) do
+        if mark[4].line_hl_group == group then
+          return true
+        end
+      end
+    end
+  end
+  return false
+end
+
+local function sign_has(needle, group)
+  local pane = workspace and workspace.panes and workspace.panes.code
+  local threads = vim.api.nvim_get_namespaces().proud_diff_threads
+  if not pane or not threads then
+    return false
+  end
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(pane.buffer, threads, 0, -1, { details = true })) do
+    if vim.trim(mark[4].sign_text or "") == needle and mark[4].sign_hl_group == group then
+      return true
+    end
+  end
+  return false
+end
+
 local function has_group(pane_name, needle, group)
+  if pane_name == "winbar" then
+    return winbar_has(needle, group)
+  elseif pane_name == "line" then
+    return line_has(needle, group)
+  elseif pane_name == "sign" then
+    return sign_has(needle, group)
+  end
   local pane = workspace and workspace.panes and workspace.panes[pane_name]
   if not pane then
     return false
