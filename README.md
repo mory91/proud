@@ -2,6 +2,24 @@
 
 Proud is a fast, memory-conscious pull request reviewer for Neovim. It keeps review work in familiar buffers, uses GitHub through an asynchronous Lua REST SDK, compares local branches offline through Git, and enforces performance SLAs as part of every verification run.
 
+![Reviewing a diff: the real file with an inline diff, a review thread beside its line, and a reply being written](docs/images/diff-thread-reply.jpg)
+
+## Screenshots
+
+**The diff.** The pull request's files, checked out and editable, with an inline diff that keeps syntax colors. `K` opens a line's review thread in full, `r` replies: post, post and resolve, or add to your pending review, with `@` mentions and suggestion blocks.
+
+![The compare page: sidebar with commits and files, and the editable inline diff](docs/images/diff.jpg)
+
+**The overview.** Description, files, commits, checks and the conversation. Walk the conversation with the cursor (`]]` / `[[`), reply to any comment with `r`, or start a new one with `c`, right in the conversation.
+
+![The overview: sidebar with files, commits and checks; the description and the conversation, with a quote reply being written](docs/images/overview-conversation.jpg)
+
+**The pull request list.** Review requests, your PRs, all open PRs, recently viewed and branches, with a live preview and filtering.
+
+![The pull request list with sources, a filter and a preview](docs/images/pull-request-list.jpg)
+
+Screenshots show `:Proud demo` with the default `proud-sunset` theme.
+
 The visual direction is defined in `proud.html`. The supplied `design.html` remains the original bundled design reference.
 
 ## Install
