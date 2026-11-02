@@ -386,6 +386,57 @@ function M.normalize_threads(comments)
   return threads
 end
 
+local function normalize_thread_comment(value, options)
+  value = type(value) == "table" and value or {}
+  local timestamp = real_value(first_value(value.createdAt, value.created_at))
+  return {
+    id = text_value(first_value(value.databaseId, value.id), nil),
+    author = actor_name(first_value(value.author, value.user)),
+    age = timestamp and util.relative_time(timestamp, options) or "",
+    body = text_value(value.body, ""),
+    pending = value.state == "PENDING" or nil,
+  }
+end
+M.normalize_thread_comment = normalize_thread_comment
+
+-- GraphQL review threads (client:list_review_threads) as Proud threads:
+-- { id (node id), path, line, resolved, outdated, root_comment_id,
+--   comments = { author, age, body, pending } }, plus the pull request's
+-- review context { pull_id, author, pending_review_id, pending_count }.
+function M.normalize_review_threads(pull, options)
+  pull = type(pull) == "table" and pull or {}
+  local threads = {}
+  local pending_count = 0
+  for _, node in ipairs(connection_items(pull.reviewThreads)) do
+    if type(node) == "table" then
+      local comments = {}
+      for _, comment in ipairs(connection_items(node.comments)) do
+        local normalized = normalize_thread_comment(comment, options)
+        if normalized.pending then
+          pending_count = pending_count + 1
+        end
+        comments[#comments + 1] = normalized
+      end
+      threads[#threads + 1] = {
+        id = text_value(node.id, tostring(#threads + 1)),
+        path = text_value(node.path, ""),
+        line = tonumber(real_value(first_value(node.line, node.originalLine))) or 0,
+        resolved = node.isResolved == true,
+        outdated = node.isOutdated == true,
+        root_comment_id = comments[1] and comments[1].id or nil,
+        comments = comments,
+      }
+    end
+  end
+  local pending = connection_items(pull.reviews)[1]
+  return threads, {
+    pull_id = text_value(pull.id, nil),
+    author = actor_name(pull.author),
+    pending_review_id = type(pending) == "table" and text_value(pending.id, nil) or nil,
+    pending_count = pending_count,
+  }
+end
+
 function M.is_diff_too_large(value)
   return github_sdk.is_diff_too_large(value)
 end
@@ -515,7 +566,35 @@ function M.github(options)
     end)
   end
 
+  -- Review context per pull request number: node id, author and the
+  -- viewer's pending review, kept from the last list_threads.
+  provider.reviews = {}
+
+  local function review_context(number)
+    local context = provider.reviews[number]
+    if not context then
+      context = { pending_count = 0 }
+      provider.reviews[number] = context
+    end
+    return context
+  end
+
+  function provider:review_context(number)
+    return review_context(number)
+  end
+
   function provider:list_threads(number, callback)
+    if self.client.list_review_threads then
+      return self.client:list_review_threads(number, function(ok, pull)
+        if not ok then
+          callback(false, pull)
+          return
+        end
+        local threads, context = M.normalize_review_threads(pull, options)
+        self.reviews[number] = context
+        callback(true, threads, context)
+      end)
+    end
     return self.client:list_review_comments(number, function(ok, result)
       if not ok then
         callback(ok, result)
@@ -534,11 +613,84 @@ function M.github(options)
     return self.client:post_issue_comment(number, body, callback)
   end
 
+  -- Posts a reply to `thread` (needs its root_comment_id).
+  function provider:reply_thread(number, thread, body, callback)
+    if not (thread and thread.root_comment_id) then
+      return schedule(callback, false, { message = "This thread cannot be replied to: GitHub did not return its comment id" })
+    end
+    return self.client:reply_to_review_comment(number, thread.root_comment_id, body, function(ok, value)
+      if not ok then
+        callback(false, value)
+        return
+      end
+      callback(true, normalize_thread_comment(value, options))
+    end)
+  end
+
+  function provider:resolve_thread(_, thread, callback)
+    if not (thread and thread.id and self.client.resolve_review_thread) then
+      return schedule(callback, false, { message = "This thread cannot be resolved: GitHub did not return its id" })
+    end
+    return self.client:resolve_review_thread(thread.id, function(ok, value)
+      callback(ok, value)
+    end)
+  end
+
+  -- Adds a reply to the viewer's pending review, starting one when there
+  -- is none. callback(true, comment, pending_count).
+  function provider:add_pending_reply(number, thread, body, callback)
+    local context = review_context(number)
+    local function add(review_id)
+      self.client:add_review_thread_reply(thread.id, body, review_id, function(ok, value)
+        if not ok then
+          callback(false, value)
+          return
+        end
+        local comment = normalize_thread_comment(value, options)
+        comment.pending = true
+        context.pending_count = (context.pending_count or 0) + 1
+        callback(true, comment, context.pending_count)
+      end)
+    end
+    if not (thread and thread.id) then
+      return schedule(callback, false, { message = "This thread cannot be replied to: GitHub did not return its id" })
+    end
+    if context.pending_review_id then
+      return add(context.pending_review_id)
+    end
+    if not context.pull_id then
+      return schedule(callback, false, { message = "Could not start a pending review: the pull request's id is unknown" })
+    end
+    self.client:create_pending_review(context.pull_id, function(ok, review)
+      if not ok then
+        callback(false, review)
+        return
+      end
+      context.pending_review_id = review.id
+      add(review.id)
+    end)
+  end
+
+  -- With a pending review (from add_pending_reply or GitHub), submits it
+  -- so its comments go out with the review; otherwise creates a review.
   function provider:submit_review(number, event, body, callback)
+    local context = self.reviews[number]
+    if context and context.pending_review_id and self.client.submit_pending_review then
+      return self.client:submit_pending_review(context.pending_review_id, event, body, function(ok, value)
+        if ok then
+          context.pending_review_id = nil
+          context.pending_count = 0
+        end
+        callback(ok, value)
+      end)
+    end
     return self.client:submit_pull_request_review(number, event, body, callback)
   end
 
   function provider:auth_status(callback)
+    if not self.client.get_authenticated_user then
+      return schedule(callback, false, { message = "This client cannot report the signed-in user" })
+    end
     return self.client:get_authenticated_user(function(ok, result)
       if not ok then
         callback(false, result)

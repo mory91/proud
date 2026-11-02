@@ -74,6 +74,7 @@ M.cursor_groups = window.cursor_groups
 -- Workspaces
 M.open_workspace = workspace.open_workspace
 M.resize_workspace = workspace.resize_workspace
+M.foreign_columns = workspace.foreign_columns
 M.render_workspace = workspace.render_workspace
 M.workspace_buffer = workspace.workspace_buffer
 M.workspace_window = workspace.workspace_window

@@ -43,6 +43,16 @@ return function(test)
   test.contains(text(ready), "● All changes", "All changes is selected by default")
   test.highlighted(ready, "9a7d3f0", "ProudAccentText", "commit ids are accented")
   test.contains(text(ready), "Files 2  +52 −4", "files are counted with totals")
+  -- Files use the overview's tree: grouped under their directory.
+  local overview_tree = sidebar.file_tree(state.files)
+  local files_root = feature.sidebar_nodes(state)[3]
+  test.eq(#overview_tree, #files_root.children, "the same directory grouping as the overview")
+  test.eq("path:monitor/src", files_root.children[1].id, "files sit under their directory")
+  test.eq("path", files_root.children[1].kind)
+  test.eq({ "file:monitor/src/diff.ts", "file:monitor/src/rowKey.ts" }, vim.tbl_map(function(node) return node.id end, files_root.children[1].children), "file ids are the overview's")
+  test.highlighted(ready, "monitor/src", "ProudMuted", "directories are muted")
+  test.highlighted(ready, "diff.ts", "ProudBright", "file names are bright")
+  test.truthy(not text(ready):find("monitor/src/diff.ts", 1, true), "rows show the file name, not the whole path")
   test.highlighted(ready, "+22", "ProudSuccessText", "additions are green")
   test.highlighted(ready, " −4", "ProudDangerText", "deletions are red")
 

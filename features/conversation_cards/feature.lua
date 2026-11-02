@@ -112,7 +112,26 @@ function M.layout(items, options)
     local header_segments = {
       { text = tostring(item.author or "unknown"), group = "ProudAccentText" },
     }
-    if item.meta_segments then
+    if item.slot then
+      -- Rows kept free for another window (an editor) in the card's place.
+      local height = math.max(1, math.floor(tonumber(item.height) or 1))
+      table.insert(cards, {
+        id = tostring(item.id or ("slot:" .. (#cards + 1))),
+        slot = true,
+        depth = depth,
+        row = cursor,
+        col = col_offset + depth * 2,
+        width = card_width,
+        height = height,
+        lines = {},
+        highlights = {},
+      })
+      cursor = cursor + height + 2 + gap
+      goto continue
+    end
+    if item.header_segments then
+      header_segments = item.header_segments
+    elseif item.meta_segments then
       for _, segment in ipairs(item.meta_segments) do
         table.insert(header_segments, segment)
       end
@@ -122,10 +141,12 @@ function M.layout(items, options)
         group = item.meta_group or "ProudMuted",
       })
     end
-    table.insert(header_segments, {
-      text = "  · " .. age_label(item.age),
-      group = "ProudMuted",
-    })
+    if not item.header_segments then
+      table.insert(header_segments, {
+        text = "  · " .. age_label(item.age),
+        group = "ProudMuted",
+      })
+    end
     for _, segment in ipairs(header_segments) do
       header = append_segment(header, highlights, 0, segment)
     end
@@ -134,7 +155,7 @@ function M.layout(items, options)
     if body == "" then
       body = "(no message)"
     end
-    for _, body_line in ipairs(ui.wrap_text(body, inner_width)) do
+    for _, body_line in ipairs(ui.wrap_text(body, inner_width, { wrap = true })) do
       local row = #lines
       local line = " " .. body_line
       table.insert(lines, ui.fit(line, card_width))
@@ -142,7 +163,7 @@ function M.layout(items, options)
         line = row,
         start_col = 0,
         end_col = #line,
-        group = body == "(no message)" and "ProudMuted" or "ProudBright",
+        group = item.body_group or (body == "(no message)" and "ProudMuted" or "ProudBright"),
       })
     end
     local id = tostring(item.id or ("card:" .. (#cards + 1)))
@@ -156,8 +177,10 @@ function M.layout(items, options)
       lines = lines,
       highlights = highlights,
       selected_group = item.depth and tonumber(item.depth) > 0 and "ProudCardReply" or "ProudCard",
+      border_group = item.border_group,
     })
     cursor = cursor + #lines + 2 + gap
+    ::continue::
   end
   cards.start_row = start_row
   cards.total_rows = math.max(0, cursor - start_row - gap)
@@ -202,11 +225,14 @@ end
 
 local function card_window_highlight(card)
   local group = card.selected_group or "ProudCard"
+  local border = card.focused and "ProudCardBorderSelected"
+    or card.spec and card.spec.border_group
+    or "ProudCardBorder"
   return ui.cursor_groups({
     Normal = group,
     NormalNC = group,
     NormalFloat = group,
-    FloatBorder = "ProudCardBorder",
+    FloatBorder = border,
     EndOfBuffer = group,
     StatusLine = "ProudPanel",
     StatusLineNC = "ProudPanel",
@@ -284,6 +310,9 @@ function M.sync(state, specs)
   end
   local visible = 0
   for _, spec in ipairs(state.specs) do
+    if spec.slot then
+      goto continue
+    end
     local top = spec.row - topline
     local clipped = clip_card(spec, top, host_height)
     local card = state.cards[spec.id]
@@ -303,7 +332,8 @@ function M.sync(state, specs)
       end
       card.spec = spec
       card.visible = clipped
-      card.selected_group = state.selected_id == spec.id and "ProudCardSelected" or spec.selected_group
+      card.selected_group = spec.selected_group
+      card.focused = state.selected_id == spec.id
       local signature = table.concat({
         table.concat(clipped.lines, "\0"),
         tostring(clipped.row),
@@ -340,6 +370,7 @@ function M.sync(state, specs)
       ui.window_options(card.window)
       visible = visible + 1
     end
+    ::continue::
   end
   return visible
 end

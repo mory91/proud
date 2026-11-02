@@ -101,8 +101,9 @@ Every feature is self-contained in `features/<feature>/` with:
 | `github_api` | GitHub REST client, pagination, auth, enrichment, and diff retrieval |
 | `github_credentials` | Centered credential modal, validation, secure persistence, and reuse |
 | `pull_request_browser` | Query, preview, and open pull requests |
-| `pull_request_overview` | Description, files, commits, checks, and conversation |
-| `diff_view` | Diff pane: real editable files or one commit's change, live inline diff, thread signs, thread window (`K`) |
+| `pull_request_overview` | Description, files, commits, checks, and conversation: explore it with the cursor, reply, and comment |
+| `diff_view` | Diff pane: real editable files or one commit's change, live inline diff, thread signs |
+| `thread_window` | A diff line's review threads in full in a float (`K`), and replying: post, post and resolve, pending review, suggestions, mentions, drafts |
 | `review_submission` | Comment, approve, and request-changes review submission |
 | `branch_compare` | Compare page (and every PR diff): sidebar with info, commits and files, next to the diff pane |
 | `keymap_help` | Remappable key and command reference |
@@ -147,6 +148,7 @@ This runs the latest working-tree plugin with a separate `test-env/nvim/bin/nvim
 | Sidebar movement | 500 expanded nodes via attached `j`/`k` handler | 0.5 ms | 64 KiB |
 | Pull request overview | 200 files + 250 body lines | 4 ms | 768 KiB |
 | Editable live diff | 1,200-line file, 600 changed lines + 1,000 threads | 8 ms | 2 MiB |
+| Thread window | 50-comment thread, wrapped, with reply header | 2 ms | 512 KiB |
 | Compare sidebar render | 100 commits + 500 files | 3 ms | 512 KiB |
 | Compare sidebar rebuild | 100 commits + 500 files, from git data | 4 ms | 3 MiB |
 | Keymap help | 80 mappings | 1 ms | 128 KiB |

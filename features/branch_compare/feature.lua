@@ -51,6 +51,10 @@ function M.create(input)
     title = M.title(state),
     message = M.loading_message(state),
   })
+  state.threads = state.diff.threads
+  if state.pull and state.pull.author and state.pull.author ~= "unknown" then
+    state.diff.pull_author = state.pull.author
+  end
   state.sidebar = tree.create(M.sidebar_nodes(state), { selected_id = "commit:all" })
   return state
 end
@@ -67,6 +71,7 @@ function M.set_pull(state, pull)
   end
   if state.diff then
     state.diff.title = M.title(state)
+    state.diff.pull_author = pull.author ~= "unknown" and pull.author or nil
   end
 end
 
@@ -220,29 +225,26 @@ function M.sidebar_nodes(state)
   if state.loading then
     file_nodes[1] = placeholder("loading:files", "Loading files…")
   end
-  for _, file in ipairs(state.loading and {} or files) do
-    local sections = {
-      { text = file.status or "M", group = status_group(file.status) },
-      { text = file.path, group = "ProudBright" },
-      {
-        parts = {
-          { text = "+" .. tostring(file.additions or 0), group = "ProudSuccessText" },
-          { text = " −" .. tostring(file.deletions or 0), group = "ProudDangerText" },
+  -- The overview's file tree: files under their directory.
+  vim.list_extend(file_nodes, sidebar().file_tree(state.loading and {} or files, {
+    spacing = { 1, 2, 2 },
+    sections = function(file)
+      local sections = {
+        { text = file.status or "M", group = status_group(file.status) },
+        { text = vim.fn.fnamemodify(file.path, ":t"), group = "ProudBright" },
+        {
+          parts = {
+            { text = "+" .. tostring(file.additions or 0), group = "ProudSuccessText" },
+            { text = " −" .. tostring(file.deletions or 0), group = "ProudDangerText" },
+          },
         },
-      },
-    }
-    if threads[file.path] then
-      sections[#sections + 1] = { text = "◆" .. threads[file.path], group = "ProudWarning" }
-    end
-    file_nodes[#file_nodes + 1] = {
-      id = "file:" .. file.path,
-      kind = "file",
-      marker = "  ",
-      spacing = 1,
-      sections = sections,
-      payload = { path = file.path, file = file },
-    }
-  end
+      }
+      if threads[file.path] then
+        sections[#sections + 1] = { text = "◆" .. threads[file.path], group = "ProudWarning" }
+      end
+      return sections
+    end,
+  }))
   local additions, deletions = totals(files)
   local file_summary = state.loading and "" or ("%d  +%d −%d"):format(#files, additions, deletions)
 
@@ -439,8 +441,9 @@ end
 
 -- Replaces review threads (pull requests).
 function M.set_threads(state, threads)
-  state.threads = vim.deepcopy(threads or {})
-  diff_view().set_threads(state.diff, state.threads)
+  diff_view().set_threads(state.diff, threads)
+  -- One list: replies and resolves in the diff pane update the counts.
+  state.threads = state.diff.threads
   refresh(state)
 end
 
@@ -477,6 +480,11 @@ function M.attach(state, options)
       if sidebar().select_file(state.sidebar, file.path) then
         sidebar().sync_cursor(state.sidebar, sidebar_window(state))
       end
+    end,
+    -- Replies and resolves go through the host (GitHub for a PR).
+    thread_action = options and options.thread_action,
+    on_threads_changed = function()
+      refresh(state)
     end,
   })
 

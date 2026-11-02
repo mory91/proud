@@ -97,6 +97,16 @@ function M.open_workspace(name, panes, options)
       M.resize_workspace(workspace)
     end,
   })
+  workspace.foreign = ""
+  vim.api.nvim_create_autocmd({ "WinNew", "WinClosed" }, {
+    group = lifecycle.group,
+    callback = function()
+      -- After the event: a new window has its size, a closed one is gone.
+      vim.schedule(function()
+        M.refit(workspace)
+      end)
+    end,
+  })
   return workspace
 end
 
@@ -111,21 +121,144 @@ local function visible_panes(workspace)
   return names
 end
 
--- Applies weight-based widths to the visible panes.
+local function pane_windows(workspace)
+  local windows = {}
+  for _, pane in pairs(workspace.panes) do
+    if not pane.hidden and pane.window then
+      windows[pane.window] = true
+    end
+  end
+  return windows
+end
+
+local function has_pane(node, windows)
+  if node[1] == "leaf" then
+    return windows[node[2]] == true
+  end
+  for _, child in ipairs(node[2]) do
+    if has_pane(child, windows) then
+      return true
+    end
+  end
+  return false
+end
+
+local function first_leaf(node)
+  while node[1] ~= "leaf" do
+    node = node[2][1]
+  end
+  return node[2]
+end
+
+local function leaves(node, found)
+  if node[1] == "leaf" then
+    found[#found + 1] = node[2]
+  else
+    for _, child in ipairs(node[2]) do
+      leaves(child, found)
+    end
+  end
+  return found
+end
+
+-- Windows that are not Proud's and sit beside the panes (another plugin's
+-- panel, a split left behind by a command): each column of them with its
+-- width and windows. Floats and splits inside a pane's column take no
+-- columns away from the panes.
+function M.foreign_columns(workspace)
+  if not vim.api.nvim_tabpage_is_valid(workspace.tabpage) then
+    return {}
+  end
+  local windows = pane_windows(workspace)
+  local tabnr = vim.api.nvim_tabpage_get_number(workspace.tabpage)
+  local node = vim.fn.winlayout(tabnr)
+  -- Descend to the row that holds the panes side by side.
+  while node[1] == "col" do
+    local next_node
+    for _, child in ipairs(node[2]) do
+      if has_pane(child, windows) then
+        next_node = child
+        break
+      end
+    end
+    if not next_node then
+      return {}
+    end
+    node = next_node
+  end
+  local columns = {}
+  if node[1] ~= "row" then
+    return columns
+  end
+  for _, child in ipairs(node[2]) do
+    if not has_pane(child, windows) then
+      local found = leaves(child, {})
+      local width = 0
+      if child[1] == "row" then
+        for index, window in ipairs(found) do
+          width = width + vim.api.nvim_win_get_width(window) + (index > 1 and 1 or 0)
+        end
+      else
+        width = vim.api.nvim_win_get_width(first_leaf(child))
+      end
+      columns[#columns + 1] = { width = width, windows = found }
+    end
+  end
+  return columns
+end
+
+local function foreign_signature(columns)
+  local ids = {}
+  for _, column in ipairs(columns) do
+    for _, window in ipairs(column.windows) do
+      ids[#ids + 1] = window
+    end
+  end
+  table.sort(ids)
+  return table.concat(ids, ",")
+end
+
+-- Applies weight-based widths to the visible panes, sharing whatever
+-- columns other windows beside them leave.
 local function apply_widths(workspace)
   local names = visible_panes(workspace)
   local weights = {}
   for _, pane_name in ipairs(names) do
     table.insert(weights, workspace.panes[pane_name].weight)
   end
-  local widths = ui_geometry.workspace_widths(weights, vim.o.columns)
+  local foreign = M.foreign_columns(workspace)
+  workspace.foreign = foreign_signature(foreign)
+  local columns = vim.o.columns
+  for _, column in ipairs(foreign) do
+    columns = columns - column.width - 1
+  end
+  local widths = ui_geometry.workspace_widths(weights, columns)
   workspace.widths = vim.deepcopy(widths)
   for index, pane_name in ipairs(names) do
     local pane = workspace.panes[pane_name]
     pane.width = widths[index]
-    if index < #names then
+    if index < #names or #foreign > 0 then
       pcall(vim.api.nvim_win_set_width, pane.window, widths[index])
     end
+  end
+  -- Setting a pane's width can borrow from a neighbouring window; give
+  -- the other windows their widths back.
+  for _, column in ipairs(foreign) do
+    if #column.windows > 0 then
+      pcall(vim.api.nvim_win_set_width, column.windows[1], column.width)
+    end
+  end
+end
+
+-- Re-fits the panes when a window beside them opens or closes.
+function M.refit(workspace)
+  if not vim.api.nvim_tabpage_is_valid(workspace.tabpage)
+    or vim.api.nvim_get_current_tabpage() ~= workspace.tabpage
+  then
+    return
+  end
+  if foreign_signature(M.foreign_columns(workspace)) ~= (workspace.foreign or "") then
+    M.resize_workspace(workspace)
   end
 end
 

@@ -195,6 +195,7 @@ function M.derive(p)
     ProudCardReply = { fg = p.text, bg = p.panel },
     ProudCardSelected = { fg = p.text, bg = p.selection },
     ProudCardBorder = { fg = p.subtle_border, bg = p.background },
+    ProudCardBorderSelected = { fg = p.accent, bg = p.background },
     ProudTabActive = { fg = p.bright, bg = p.background, bold = true },
     ProudCursor = { fg = p.background, bg = p.text },
     ProudCursorHidden = { fg = p.background, bg = p.background, blend = 100 },

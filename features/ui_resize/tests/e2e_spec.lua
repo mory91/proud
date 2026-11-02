@@ -41,6 +41,32 @@ return function(test)
   test.truthy(feature.resize_workspace(workspace), "workspace resize entry point refreshes content")
   test.truthy(renders == 1, "workspace resize callback re-renders once")
   test.contains(table.concat(vim.api.nvim_buf_get_lines(workspace.panes.left.buffer, 0, -1, false), "\n"), "left resized")
+
+  -- A window beside the panes (another plugin's panel, a split a failed
+  -- command left behind) keeps its width; the panes share the rest by
+  -- weight, and get it all back when it closes.
+  local function pane_widths()
+    return { vim.api.nvim_win_get_width(workspace.panes.left.window), vim.api.nvim_win_get_width(workspace.panes.right.window) }
+  end
+  local full = pane_widths()
+  vim.api.nvim_set_current_win(workspace.panes.left.window)
+  vim.cmd("30vnew")
+  local other = vim.api.nvim_get_current_win()
+  local fitted = feature.workspace_widths({ 0.4, 0.6 }, vim.o.columns - 31)
+  test.truthy(vim.wait(1000, function() return vim.deep_equal(pane_widths(), fitted) end, 10), "panes re-fit beside a new window")
+  test.eq(30, vim.api.nvim_win_get_width(other), "the other window keeps its width")
+  test.eq(1, #ui.foreign_columns(workspace), "one column of other windows")
+  vim.cmd("split")
+  local stacked = vim.api.nvim_get_current_win()
+  vim.wait(50, function() return false end)
+  test.eq(fitted, pane_widths(), "a split inside the other column changes nothing")
+  vim.api.nvim_win_close(stacked, true)
+  local opened_floats = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false, { relative = "editor", row = 1, col = 1, width = 10, height = 2 })
+  vim.wait(50, function() return false end)
+  test.eq(fitted, pane_widths(), "floats take no columns")
+  vim.api.nvim_win_close(opened_floats, true)
+  vim.api.nvim_win_close(other, true)
+  test.truthy(vim.wait(1000, function() return vim.deep_equal(pane_widths(), full) end, 10), "closing it gives the panes their full widths")
   vim.cmd("tabclose!")
 
   local deleted_surface = open_pair({ lines = { "delete target" } }, { lines = { "delete companion" } }, "proud://lifecycle-delete")

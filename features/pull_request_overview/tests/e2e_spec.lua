@@ -289,5 +289,167 @@ return function(test)
     title = "must not hydrate closed scene",
   }))
   test.eq("Pull request #906", stale_state.pull.title, "closed scenes ignore late provider callbacks")
+
+  -- Conversation: ]] / [[ walk the description and each card; r replies,
+  -- c comments, in an editor in the conversation (design screen 2).
+  local function press(value)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(value, true, false, true), "x", false)
+  end
+  local talk = vim.deepcopy(fixtures.overview)
+  talk.review_comments = {
+    { id = 301, reply_to_id = "100", reply_to_kind = "review", author = "dev-lee", age = "1h", body = "attempt is already incremented here." },
+    { id = 302, in_reply_to_id = 301, author = "sara-k", age = "40m", body = "Fixing in the next push." },
+  }
+  local posts = {}
+  local answer = { true }
+  local talk_state = feature.create(talk)
+  feature.open(talk_state, {
+    viewer = function() return "morteza" end,
+    on_comment = function(kind, root, body, done)
+      posts[#posts + 1] = { kind = kind, root = root, body = body }
+      local ok = answer[1]
+      vim.schedule(function()
+        done(ok, ok and { id = 900 + #posts, author = "morteza", body = body } or { message = "HTTP 403: Resource not accessible" })
+      end)
+    end,
+  })
+  local details = ui.workspace_window(talk_state.workspace, "details")
+  vim.api.nvim_set_current_win(details)
+  vim.api.nvim_win_set_cursor(details, { 1, 0 })
+  press("]]")
+  test.eq("description", talk_state.focused, "]] goes to the description first")
+  press("]]")
+  test.eq("review:100", talk_state.focused, "then to the first conversation item")
+  test.eq("review:100", talk_state.comment_card_windows.selected_id, "the focused card is selected")
+  local focused_card = talk_state.comment_card_windows.cards["review:100"]
+  test.contains(vim.wo[focused_card.window].winhighlight, "FloatBorder:ProudCardBorderSelected", "with an accent border")
+  press("]]")
+  test.eq("comment:201", talk_state.focused, "replies are items too")
+  press("]]")
+  test.eq("review_comment:301", talk_state.focused, "and inline review comments")
+  press("[[")
+  press("[[")
+  test.eq("review:100", talk_state.focused, "[[ goes back")
+  local card_line = vim.api.nvim_win_get_cursor(details)[1]
+  press("j")
+  test.eq("review:100", talk_state.focused, "moving inside a card keeps it focused")
+  vim.api.nvim_win_set_cursor(details, { card_line, 0 })
+
+  -- The comment box is always at the end, like the design.
+  local box = talk_state.comment_card_windows.specs[#talk_state.comment_card_windows.specs]
+  test.eq("comment_box", box.id, "the comment box ends the conversation")
+  test.contains(table.concat(box.lines, "\n"), "Comment  · markdown", "with the design's header")
+  test.contains(table.concat(box.lines, "\n"), "Leave a comment on the PR", "and its placeholder")
+
+  -- r on a review quotes it into a new PR comment (GitHub has no threads
+  -- for those).
+  press("r")
+  local editor = talk_state.editor
+  test.truthy(editor and not editor.closed, "r opens the editor")
+  test.eq(editor.window, vim.api.nvim_get_current_win(), "focused")
+  test.eq("new", editor.target, "a review is answered with a new PR comment")
+  test.eq("markdown", vim.bo[editor.buffer].filetype, "in markdown")
+  test.contains(table.concat(vim.api.nvim_buf_get_lines(editor.buffer, 0, -1, false), "\n"), "> Backoff math is off by one", "quoting it")
+  test.truthy(vim.fn.maparg("@", "i", false, true).buffer == 1, "@ completes mentions")
+  test.truthy(vim.tbl_contains(feature.participants(talk_state), "dev-lee"), "from the conversation")
+  local editor_row = vim.api.nvim_win_get_config(editor.window).row
+  local slot
+  for _, spec in ipairs(talk_state.conversation_cards) do
+    if spec.slot then slot = spec end
+  end
+  test.truthy(slot ~= nil, "the conversation makes room for the editor")
+  local topline = vim.api.nvim_win_call(details, function() return vim.fn.winsaveview().topline end)
+  test.eq(slot.row - topline, editor_row, "the editor sits in that room")
+  press("<Esc>")
+  test.truthy(editor.closed, "<Esc> closes the editor")
+  test.eq(details, vim.api.nvim_get_current_win(), "focus returns to the overview")
+  test.eq("comment_box", talk_state.focused, "on the comment box")
+  test.contains(talk_state.drafts.new or "", "> Backoff math", "keeping the draft")
+  box = talk_state.comment_card_windows.specs[#talk_state.comment_card_windows.specs]
+  test.contains(table.concat(box.lines, "\n"), "Backoff math", "the comment box shows the draft")
+
+  -- c reopens the draft; <C-s> posts it.
+  press("c")
+  editor = talk_state.editor
+  test.contains(editor.text(), "> Backoff math", "c restores the draft")
+  press("<C-s>")
+  test.truthy(vim.wait(1000, function() return editor.closed end, 10), "posting closes the editor")
+  test.eq("comment", posts[1].kind, "a PR comment is posted")
+  test.eq(nil, talk_state.drafts.new, "the posted draft is cleared")
+  test.eq("comment:901", talk_state.focused, "the cursor lands on the new comment")
+  test.contains(table.concat(talk_state.comment_card_windows.specs[#talk_state.comment_card_windows.specs - 1].lines, "\n"), "morteza", "which shows in the conversation")
+
+  -- r on an inline review comment replies in its thread, under it.
+  local go_item
+  for _, item in ipairs(talk_state.items) do
+    if item.id == "review_comment:302" then
+      go_item = item
+    end
+  end
+  talk_state.go_to(go_item)
+  press("r")
+  editor = talk_state.editor
+  test.eq("review_comment:301", editor.target, "the reply goes to the thread's first comment")
+  local reply_slot
+  for index, spec in ipairs(talk_state.conversation_cards) do
+    if spec.slot then
+      reply_slot = spec
+      test.eq("review_comment:302", talk_state.conversation_cards[index - 1].id, "the editor sits at the end of the thread")
+    end
+  end
+  test.truthy(reply_slot.depth > 0, "indented like a reply")
+  test.eq(" Reply to dev-lee", vim.api.nvim_win_get_config(editor.window).title[1][1], "titled with who it answers")
+
+  -- A failed post keeps the editor and the text, and says why.
+  answer = { false }
+  local notify = vim.notify
+  local notified
+  vim.notify = function(message) notified = message end
+  press("aWill do<C-s>")
+  test.truthy(vim.wait(1000, function() return notified ~= nil end, 10), "the error is reported")
+  vim.notify = notify
+  test.contains(notified, "HTTP 403", "with GitHub's message")
+  test.truthy(not editor.closed, "the editor stays open")
+  test.eq("Will do", editor.text(), "the text is kept")
+  test.contains(vim.api.nvim_win_get_config(editor.window).footer[1][1], "Could not post", "the footer shows it")
+  answer = { true }
+  press("<C-s>")
+  test.truthy(vim.wait(1000, function() return editor.closed end, 10), "posting again works")
+  test.eq("reply", posts[#posts].kind, "as a threaded reply")
+  test.eq("301", posts[#posts].root.source_id, "to comment 301")
+  local reply_entry = talk_state.entries["review_comment:" .. tostring(900 + #posts)]
+  test.truthy(reply_entry ~= nil and reply_entry.parent ~= nil, "the reply joins the thread")
+
+  -- Empty comments are not posted; closing the scene keeps the draft.
+  local count = #posts
+  press("c")
+  press("<C-s>")
+  test.eq(count, #posts, "empty comments are not posted")
+  test.contains(vim.api.nvim_win_get_config(talk_state.editor.window).footer[1][1], "Write something first.", "and say why")
+  press("aunsent")
+  vim.cmd("stopinsert")
+  vim.cmd("silent! tabclose!")
+  test.eq("unsent", talk_state.drafts.new, "closing the overview keeps the draft")
+
+  -- Through the session: comments post to GitHub's issue comments and
+  -- inline replies to the review comment replies endpoint.
+  local requests = {}
+  fake_client.post_issue_comment = function(_, number, body, callback)
+    requests[#requests + 1] = { "comment", number, body }
+    callback(true, { id = 77, user = { login = "morteza" }, body = body })
+  end
+  fake_client.reply_to_review_comment = function(_, number, comment_id, body, callback)
+    requests[#requests + 1] = { "reply", number, comment_id, body }
+    callback(true, { id = 78, user = { login = "morteza" }, body = body, created_at = "2026-01-01T00:00:00Z" })
+  end
+  local act = session.comment_action(482)
+  local results = {}
+  act("comment", nil, "Looks good", function(ok, value) results[1] = { ok, value } end)
+  act("reply", { source_id = "301" }, "Done", function(ok, value) results[2] = { ok, value } end)
+  test.truthy(vim.wait(1000, function() return results[2] ~= nil end, 10), "both post")
+  test.eq({ "comment", 482, "Looks good" }, requests[1], "a comment posts to the PR's issue comments")
+  test.eq({ "reply", 482, "301", "Done" }, requests[2], "a reply posts to the thread's first comment")
+  test.eq(77, results[1][2].id, "returning the new comment")
+  test.eq("morteza", results[1][2].author)
   credentials.reset()
 end

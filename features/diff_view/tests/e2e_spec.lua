@@ -145,6 +145,23 @@ return function(test)
   test.eq(1, #floats(), "switching files keeps one thread window")
   retry_buffer = vim.api.nvim_win_get_buf(window)
 
+  -- Replying from the diff: K, K, r. Without host actions (demos, plain
+  -- compares) the reply stays local; a pending reply is counted.
+  local thread_count = #state.threads[1].comments
+  vim.api.nvim_set_current_win(window)
+  vim.api.nvim_feedkeys("K", "x", false)
+  test.truthy(state.thread_window.editor == nil, "the thread window opens without the editor")
+  vim.api.nvim_feedkeys("r", "x", false)
+  test.truthy(state.thread_window.editor ~= nil, "r in the focused thread window opens the editor")
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("aLooks right now<C-p>", true, false, true), "x", false)
+  test.truthy(vim.wait(1000, function() return #state.threads[1].comments == thread_count + 1 end, 10), "the reply is added to the thread")
+  test.truthy(state.threads[1].comments[thread_count + 1].pending, "it is pending")
+  test.contains(plain(vim.wo[window].winbar), "review: 1 pending comment", "the window bar counts the pending review")
+  test.eq(1, #vim.api.nvim_buf_get_extmarks(vim.api.nvim_win_get_buf(window), feature.thread_namespace, 0, -1, {}), "the thread's sign stays")
+  vim.api.nvim_feedkeys("q", "x", false)
+  test.eq(nil, state.thread_window, "q closes it")
+  test.eq(window, vim.api.nvim_get_current_win(), "back in the diff")
+
   -- One commit against its parent: a read-only snapshot, no threads.
   local commits = await(function(done) git.log(repo.work, base .. "..HEAD", done) end)
   test.eq(2, #commits, "the branch has two commits")

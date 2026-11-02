@@ -23,7 +23,9 @@ local definitions = {
 
   toggle_viewed = { group = "Overview", description = "Toggle the selected file viewed", keys = { "v" } },
   open_diff = { group = "Overview", description = "Open the complete file diff", keys = { "<CR>", "d" } },
-  comment = { group = "Overview", description = "Draft a pull request comment", keys = { "c" } },
+  comment = { group = "Overview", description = "Write a comment on the pull request", keys = { "c" } },
+  next_conversation_item = { group = "Overview", description = "Go to the next conversation item (description first)", keys = { "]]" } },
+  previous_conversation_item = { group = "Overview", description = "Go to the previous conversation item", keys = { "[[" } },
   open_review = { group = "Overview", description = "Compose a pull request review", keys = { "R" } },
 
   next_file = { group = "Diff", description = "Select the next file", keys = { "]f" } },
@@ -33,8 +35,14 @@ local definitions = {
   close_thread = { group = "Diff", description = "Close the thread window", keys = { "q", "<Esc>" } },
   next_thread = { group = "Diff", description = "Select the next review thread", keys = { "]t" } },
   previous_thread = { group = "Diff", description = "Select the previous review thread", keys = { "[t" } },
-  reply = { group = "Diff", description = "Reply to the selected thread", keys = { "r" } },
-  resolve = { group = "Diff", description = "Resolve the selected thread", keys = { "R" } },
+  reply = { group = "Diff", description = "Reply to the thread, or to the comment under the cursor in the overview", keys = { "r" } },
+  resolve = { group = "Diff", description = "Resolve the thread (in the thread window)", keys = { "R" } },
+
+  post_reply = { group = "Reply", description = "Post the reply or comment", keys = { "<C-s>" } },
+  post_and_resolve = { group = "Reply", description = "Post the reply and resolve the thread", keys = { "<C-r>" } },
+  add_to_review = { group = "Reply", description = "Add the reply to your pending review", keys = { "<C-p>" } },
+  insert_suggestion = { group = "Reply", description = "Insert a suggestion with the commented line", keys = { "<C-g>" } },
+  keep_draft = { group = "Reply", description = "Close the editor and keep the draft", keys = { "<Esc>" } },
 
   swap_branches = { group = "Compare", description = "Swap base and head branches", keys = { "S" } },
   toggle_compare_mode = { group = "Compare", description = "Toggle two-dot and three-dot compare", keys = { "<C-d>" } },
@@ -55,6 +63,7 @@ local groups = {
   "Pull request list",
   "Overview",
   "Diff",
+  "Reply",
   "Compare",
   "Review",
   "Authentication",

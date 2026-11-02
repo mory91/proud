@@ -9,6 +9,7 @@ local features = {
   "pull_request_browser",
   "pull_request_overview",
   "diff_view",
+  "thread_window",
   "branch_compare",
   "keymap_help",
   "review_submission",
