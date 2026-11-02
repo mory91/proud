@@ -6,6 +6,8 @@ Tree nodes may be headers, paths, leaves, or future nested records. Headers rema
 
 Selection movement is cursor-only: `j` and `k` update the selected tree node and native window cursor without repainting the sidebar or any host panes. Hosts receive only a lightweight `on_change("selection")` notification when selection changes. Expansion, collapse, and viewed-state changes remain structural and may request a full refresh. This distinction keeps rapid traversal responsive even when the host composes expensive overview panes and conversation cards.
 
+Hosts can hide and show the sidebar (`<leader>e` on the overview and compare pages); the tree keeps its state and follows the new window. Leaves other than files (commits) are handed to the host's `on_activate`.
+
 ## Related Code
 
 - `lua/proud/components/section_row.lua` owns up-to-five-section rows and group-specific spacing.

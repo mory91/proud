@@ -1,23 +1,35 @@
 return function(test)
-  local feature = require("proud.loader").load("single_diff_threads")
+  local feature = require("proud.loader").load("diff_view")
   local fixtures = require("proud.fixtures")
-  local state = feature.create(fixtures.overview, fixtures.threads, { cwd = "/tmp/repo" })
+  local state = feature.create({
+    cwd = "/tmp/repo",
+    threads = fixtures.threads,
+    title = "#482 main...feat/task-retry-backoff",
+    message = "Checking out feat/task-retry-backoff…",
+  })
   test.eq("loading", state.status, "a new diff starts loading")
   test.eq("/tmp/repo", state.cwd, "the repository directory is kept")
-  test.eq("#482 diff · single-pane", feature.title(state), "the scene is titled for single-pane mode")
+  state.label = {
+    { "main", "ProudAccentText" },
+    { "...", "ProudMuted" },
+    { "feat/task-retry-backoff", "ProudSuccessText" },
+  }
 
   local loading_bar = feature.winbar(state)
-  test.eq("main", loading_bar[1][1], "the window bar starts with the base branch")
+  test.eq("main", loading_bar[1][1], "the window bar starts with the host's label")
   test.eq("ProudSuccessText", loading_bar[3][2], "the head branch is green")
   test.contains(loading_bar[4][1], "loading", "the window bar shows loading before checkout")
-  test.contains(table.concat(feature.status_view(state).lines, "\n"), "Checking out feat/task-retry-backoff", "loading names the branch being checked out")
+  test.contains(table.concat(feature.status_view(state).lines, "\n"), "Checking out feat/task-retry-backoff", "loading shows the host's message")
 
   state.status = "error"
   state.error = "git checkout feat/task-retry-backoff\nerror: Your local changes to the following files would be overwritten by checkout"
   local error_view = feature.status_view(state)
-  test.highlighted(error_view, "Could not open the diff", "ProudDangerText", "errors are headed in the danger color")
+  test.highlighted(error_view, "Could not open the diff for #482", "ProudDangerText", "errors are headed in the danger color")
   test.contains(table.concat(error_view.lines, "\n"), "would be overwritten by checkout", "git's message is shown verbatim")
   test.contains(feature.winbar(state)[4][1], "could not open", "the window bar reports the error")
+
+  state.status = "empty"
+  test.contains(table.concat(feature.status_view(state).lines, "\n"), "No changes in #482", "an empty comparison says so")
 
   state.status = "ready"
   state.files = {
@@ -65,4 +77,36 @@ return function(test)
   test.eq("x", above_first, "a deleted first line is shown above line 1")
   test.eq("b", changed_old, "a changed line shows its old text above the new one")
   vim.api.nvim_buf_delete(buffer, { force = true })
+
+  -- Diff colors are backgrounds only, so code keeps its syntax colors;
+  -- deleted lines get the base text's treesitter colors.
+  test.eq(nil, vim.api.nvim_get_hl(0, { name = inline.groups.add, link = false }).fg, "added lines keep their syntax foreground")
+  test.eq(nil, vim.api.nvim_get_hl(0, { name = inline.groups.delete, link = false }).fg, "deleted lines keep their syntax foreground")
+  local code = vim.api.nvim_create_buf(false, true)
+  vim.bo[code].filetype = "lua"
+  vim.api.nvim_buf_set_lines(code, 0, -1, false, { "local x = 1" })
+  vim.api.nvim_win_set_buf(0, code)
+  local handle = inline.attach(code, { base = "local x = 2\n" })
+  test.truthy(vim.wait(2000, function() return handle.syntax() and handle.syntax().tree ~= nil end, 5), "the base is parsed in the background")
+  local chunks
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(code, inline.namespace, 0, -1, { details = true })) do
+    if mark[4].line_hl_group then
+      test.eq(inline.groups.add, mark[4].line_hl_group, "added lines use the background-only group")
+    end
+    chunks = chunks or (mark[4].virt_lines and mark[4].virt_lines[1])
+  end
+  test.eq({ "local", { inline.groups.delete, "@keyword.lua" } }, chunks[1], "deleted code is colored by its syntax over the delete background")
+  test.eq({ "2", { inline.groups.delete, "@number.lua" } }, chunks[7], "each token keeps its own color")
+  test.eq(inline.groups.delete, chunks[#chunks][2], "the row is padded with the delete background")
+  local plain_syntax = inline.syntax("local x\n", "no_such_language")
+  vim.api.nvim_buf_set_lines(code, 0, -1, false, { "local y = 1" })
+  handle.refresh()
+  local recolored
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(code, inline.namespace, 0, -1, { details = true })) do
+    recolored = recolored or (mark[4].virt_lines and mark[4].virt_lines[1][1])
+  end
+  test.eq({ "local", { inline.groups.delete, "@keyword.lua" } }, recolored, "edits keep the deleted lines colored")
+  test.eq(nil, plain_syntax, "languages without a parser fall back to plain deleted lines")
+  handle.detach()
+  vim.api.nvim_buf_delete(code, { force = true })
 end

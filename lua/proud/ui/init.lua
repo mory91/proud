@@ -78,6 +78,10 @@ M.render_workspace = workspace.render_workspace
 M.workspace_buffer = workspace.workspace_buffer
 M.workspace_window = workspace.workspace_window
 M.focus_workspace_pane = workspace.focus_workspace_pane
+M.pane_visible = workspace.pane_visible
+M.hide_pane = workspace.hide_pane
+M.show_pane = workspace.show_pane
+M.toggle_pane = workspace.toggle_pane
 M.close_workspace = workspace.close_workspace
 
 return M

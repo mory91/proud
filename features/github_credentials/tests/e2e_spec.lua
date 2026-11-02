@@ -135,6 +135,8 @@ return function(test)
     credential = false,
     client = fake_client,
     cwd = vim.fn.getcwd(),
+    -- Never check out branches in the repository running the tests.
+    background_checkout = false,
   })
   session.open_pull_requests({ query = "is:open" })
   test.truthy(vim.wait(2000, function()

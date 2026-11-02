@@ -45,7 +45,7 @@ export PROUD_START="none"
 export PROUD_TERM_ROWS=40
 export PROUD_TERM_COLUMNS=120
 export PROUD_SKIP_MEMORY_LEAKS=1
-for screen in credentials browser overview single compare help review; do
+for screen in credentials browser overview diff compare help review; do
   export PROUD_MEMORY_SCREEN="$screen"
   run_expect "$ROOT/tests/terminal/memory_leak_test.exp" "$LOG_DIR/memory-${screen}.log"
   echo "real-terminal memory lifecycle OK for ${screen}"
@@ -132,7 +132,7 @@ export PROUD_TERM_COLUMNS=100
 run_expect "$ROOT/tests/terminal/filter_header_test.exp" "$LOG_DIR/filter-header.log"
 echo "editable PR filter header OK"
 
-for scene in "browser:2" "overview:2" "single:1" "compare:2" "help:3" "review:2"; do
+for scene in "browser:2" "overview:2" "diff:2" "compare:2" "help:3" "review:2"; do
   screen="${scene%%:*}"
   expected="${scene##*:}"
   export PROUD_START="demo"
@@ -162,17 +162,17 @@ run_expect "$ROOT/tests/terminal/review_submission_test.exp" "$LOG_DIR/review-su
 echo "review composer and overview entry point OK"
 
 export PROUD_START="demo"
-export PROUD_DEMO_SCREEN="single"
+export PROUD_DEMO_SCREEN="diff"
 for size in "80 24" "100 30" "120 40" "160 45"; do
   read -r columns rows <<<"$size"
   export PROUD_TERM_ROWS="$rows"
   export PROUD_TERM_COLUMNS="$columns"
   run_expect "$ROOT/tests/terminal/file_diff_quality_test.exp" "$LOG_DIR/file-diff-${columns}x${rows}.log"
-  echo "full-file diff OK at ${columns}x${rows}"
+  echo "pull request diff OK at ${columns}x${rows}"
 done
 
 export PROUD_START="demo"
-export PROUD_DEMO_SCREEN="single"
+export PROUD_DEMO_SCREEN="diff"
 export PROUD_TERM_ROWS=40
 export PROUD_TERM_COLUMNS=160
 run_expect "$ROOT/tests/terminal/diff_file_selection_test.exp" "$LOG_DIR/diff-file-selection.log"
@@ -186,7 +186,7 @@ echo "overview diff navigation OK"
 
 export PROUD_TERM_ROWS=45
 export PROUD_TERM_COLUMNS=160
-for scene in browser overview single compare help review; do
+for scene in browser overview diff compare help review; do
   export PROUD_COLOR_SCENE="$scene"
   run_expect "$ROOT/tests/terminal/color_palette_test.exp" "$LOG_DIR/colors-${scene}.log"
   echo "semantic colors OK for ${scene}"

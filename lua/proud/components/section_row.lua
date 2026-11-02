@@ -3,7 +3,11 @@ local M = {}
 M.max_sections = 5
 
 local function single_line(value)
-  return (tostring(value or ""):gsub("\r\n", "\n"):gsub("[\r\n]", " "))
+  value = tostring(value or "")
+  if not value:find("[\r\n]") then
+    return value
+  end
+  return (value:gsub("\r\n", "\n"):gsub("[\r\n]", " "))
 end
 
 local function normalize_part(part)

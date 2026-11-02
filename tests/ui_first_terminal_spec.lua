@@ -33,6 +33,8 @@ session.configure({
   credential = false,
   client = fake_client,
   cwd = vim.fn.getcwd(),
+  -- Never check out branches in the repository running the tests.
+  background_checkout = false,
 })
 
 session.open_overview(905)
@@ -84,28 +86,20 @@ vim.api.nvim_echo({ { "UI_FIRST_HYDRATED=" .. tostring(
   hydrated and layout_preserved and opened_after_hydration and keyboard_navigation and safe_commit
 ) } }, false, {})
 
-local compare_callback
-local provider_module = require("proud.provider")
-provider_module.git = function()
-  return {
-    compare = function(_, _, _, callback)
-      compare_callback = callback
-    end,
-  }
-end
-session.open_compare("main", "feature")
-local compare_open = vim.wait(2000, function()
-  return session.current and session.current.feature == "branch_compare"
+-- The compare page checks out branches: run it on a fixture repository,
+-- never in the repository running the tests.
+local fixture_repo = require("proud.fixture_repo")
+local compare_repo = fixture_repo.create()
+session.configure({ cwd = compare_repo.work })
+session.open_compare("main", compare_repo.head_ref)
+local compare_state = session.current and session.current.state
+local compare_open = session.current ~= nil
+  and session.current.feature == "branch_compare"
+  and compare_state.loading == true
+local compare_hydrated = vim.wait(15000, function()
+  return compare_state.loading == false and compare_state.ahead == 2 and compare_state.diff.status == "ready"
 end, 10)
-vim.api.nvim_feedkeys("S", "x", false)
-compare_callback(true, {
-  "3\t12\n",
-  "abc1234 Feature commit\n",
-  "1\t0\tsrc/feature.ts\n",
-})
-local compare_hydrated = vim.wait(2000, function()
-  local state = session.current and session.current.state
-  return state and state.loading == false and state.ahead == 3 and state.behind == 12
-end, 10)
+compare_state.close()
+fixture_repo.remove(compare_repo)
 vim.api.nvim_echo({ { "UI_FIRST_COMPARE=" .. tostring(compare_open and compare_hydrated) } }, false, {})
 credentials.reset()

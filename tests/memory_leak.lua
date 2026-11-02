@@ -68,33 +68,40 @@ local scenarios = {
       close_with_key("q")
     end,
   },
-  single = {
-    -- The editable diff shows real files, where q means macro recording,
-    -- so the scene is closed through its own close function after the
-    -- checkout has finished.
+  -- The compare page checks out the branch and opens real files; it is
+  -- measured once loaded, then closed with q from its focused sidebar.
+  diff = {
     open = function()
-      session.demo("single")
+      session.demo("diff")
       local state = session.current.state
       vim.wait(15000, function()
-        return state.status ~= "loading"
-          and (state.status ~= "ready" or next(state.scene.handles) ~= nil)
+        return state.diff.status ~= "loading"
+          and (state.diff.status ~= "ready" or next(state.diff.scene.handles) ~= nil)
       end, 10)
       return session.current
     end,
     close = function(handle)
-      handle.state.close()
+      close_with_key("q")
       vim.wait(1000, function()
-        return handle.state.scene.lifecycle.closed()
+        return handle.state.workspace.lifecycle.closed()
       end, 10)
     end,
   },
   compare = {
     open = function()
       session.demo("compare")
+      local state = session.current.state
+      vim.wait(15000, function()
+        return state.diff.status ~= "loading"
+          and (state.diff.status ~= "ready" or next(state.diff.scene.handles) ~= nil)
+      end, 10)
       return session.current
     end,
-    close = function()
+    close = function(handle)
       close_with_key("q")
+      vim.wait(1000, function()
+        return handle.state.workspace.lifecycle.closed()
+      end, 10)
     end,
   },
   help = {

@@ -76,7 +76,7 @@ return function(test)
   local preset_backgrounds = {}
   for _, name in ipairs(presets) do
     local groups = themes.get(name)
-    test.eq(25, #vim.tbl_keys(groups), name .. " resolves a complete Proud highlight set")
+    test.eq(27, #vim.tbl_keys(groups), name .. " resolves a complete Proud highlight set")
     test.truthy(preset_backgrounds[groups.ProudBackground.bg] == nil, name .. " has a distinct background palette")
     preset_backgrounds[groups.ProudBackground.bg] = name
     proud_theme.setup({ theme = name })

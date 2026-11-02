@@ -44,8 +44,8 @@ return function(test)
   test.eq(3, hot.highlights[6], "open/add/close tracks columns")
 
   local compare = require("proud.loader").load("branch_compare")
-  local loading = compare.render(compare.create({ base = "main", head = "feature", loading = true }))
-  test.highlighted(loading, "Files", "ProudAccentText", "the Files heading is highlighted while loading")
+  local loading = require("proud.loader").load("sidebar").render(compare.create({ base = "main", head = "feature" }).sidebar, 40)
+  test.highlighted(loading, "Files", "ProudBright", "the Files heading is highlighted while loading")
 
   local spanned = ui.view.new()
   test.eq(0, spanned:spans("The token is ", nil, "hidden", "G", "."), "spans returns its row")

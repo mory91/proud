@@ -23,15 +23,23 @@ proc wait_for {pattern label} {
 log_user 1
 spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && ./scripts/run_proud_test_nvim.sh"
 stty rows 40 columns 160
-wait_for {#482 diff.*single} "single file diff workspace"
-send {:lua local s=require('proud.session').current.state; vim.wait(15000,function() return s.status~='loading' and next(s.scene.handles)~=nil end,20); vim.api.nvim_echo({{'DIFF_READY='..s.status}},false,{})}
+wait_for {#482 compare} "pull request diff page"
+send {:lua local s=require('proud.session').current.state.diff; vim.wait(15000,function() return s.status~='loading' and next(s.scene.handles)~=nil end,20); vim.api.nvim_set_current_win(s.scene.window); vim.api.nvim_echo({{'DIFF_READY='..s.status}},false,{})}
 send "\r"
 wait_for {DIFF_READY=ready} "editable diff loaded"
 send "\]f"
 send "\x0c"
-send {:lua local s=require('proud.session').current.state; vim.wait(15000,function() return s.file_cursor==2 and s.status=='ready' and next(s.scene.handles)~=nil and vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(s.scene.window)):find('task/retry.ts',1,true)~=nil end,20); local buf=vim.api.nvim_win_get_buf(s.scene.window); local code=table.concat(vim.api.nvim_buf_get_lines(buf,0,-1,false),'\n'); local ok=s.file_cursor==2 and (vim.wo[s.scene.window].winbar or ''):find('packages/runner/src/task/retry.ts',1,true)~=nil and code:find('export async function withRetry',1,true)~=nil; vim.api.nvim_echo({{('FILE_SWITCH_OK='..tostring(ok))}},false,{})}
+send {:lua local page=require('proud.session').current.state; local s=page.diff; vim.wait(15000,function() return s.file_cursor==2 and s.status=='ready' and next(s.scene.handles)~=nil and vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(s.scene.window)):find('task/retry.ts',1,true)~=nil end,20); local buf=vim.api.nvim_win_get_buf(s.scene.window); local code=table.concat(vim.api.nvim_buf_get_lines(buf,0,-1,false),'\n'); local ok=s.file_cursor==2 and (vim.wo[s.scene.window].winbar or ''):find('packages/runner/src/task/retry.ts',1,true)~=nil and code:find('export async function withRetry',1,true)~=nil and page.sidebar.selected_id=='file:packages/runner/src/task/retry.ts'; vim.api.nvim_echo({{('FILE_SWITCH_OK='..tostring(ok))}},false,{})}
 send "\r"
 wait_for {FILE_SWITCH_OK=true} "]f opens the next changed file"
+send "\\e"
+send {:lua local page=require('proud.session').current.state; local ok=#vim.api.nvim_tabpage_list_wins(page.workspace.tabpage)==1 and not page.workspace.lifecycle.closed(); vim.api.nvim_echo({{('SIDEBAR_HIDDEN='..tostring(ok))}},false,{})}
+send "\r"
+wait_for {SIDEBAR_HIDDEN=true} "the sidebar hides"
+send "\\e"
+send {:lua local page=require('proud.session').current.state; local ok=#vim.api.nvim_tabpage_list_wins(page.workspace.tabpage)==2 and require('proud.ui').pane_visible(page.workspace,'sidebar'); vim.api.nvim_echo({{('SIDEBAR_SHOWN='..tostring(ok))}},false,{})}
+send "\r"
+wait_for {SIDEBAR_SHOWN=true} "the sidebar comes back"
 sleep 1
 send ":qa!\r"
 expect eof

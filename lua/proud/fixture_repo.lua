@@ -68,8 +68,15 @@ function M.contents()
   return files
 end
 
+-- Commit message for each changed file's commit on the PR branch.
+M.messages = {
+  ["packages/runner/src/config.ts"] = "Read retry limits from config",
+  ["packages/runner/src/task/retry.ts"] = "Add exponential backoff",
+}
+
 -- Creates the repository; returns { root, work, origin, number, base_ref,
--- head_ref, head_sha }. `options.files` overrides M.contents().
+-- head_ref, head_sha }. `options.files` overrides M.contents(), and
+-- `options.messages` the commit messages (by path).
 function M.create(options)
   options = options or {}
   local pull = fixtures.overview
@@ -95,6 +102,7 @@ function M.create(options)
   git(work, { "add", "-A" })
   git(work, { "commit", "-q", "-m", "base" })
 
+  -- One commit per changed file, so the branch has commits to pick from.
   git(work, { "checkout", "-q", "-b", head_ref })
   for _, file in ipairs(files) do
     if #file.head > 0 then
@@ -102,9 +110,9 @@ function M.create(options)
     else
       git(work, { "rm", "-q", file.path })
     end
+    git(work, { "add", "-A" })
+    git(work, { "commit", "-q", "-m", (options.messages or M.messages)[file.path] or ("Update " .. file.path) })
   end
-  git(work, { "add", "-A" })
-  git(work, { "commit", "-q", "-m", "pull request changes" })
   local head_sha = git(work, { "rev-parse", "HEAD" })
 
   git(root, { "clone", "-q", "--bare", work, origin })

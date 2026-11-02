@@ -45,29 +45,34 @@ local expectations = {
     { pane = "details", needle = "dev-lee", group = "ProudAccentText" },
     { pane = "details", needle = "change requested", group = "ProudWarning" },
   },
-  single = {
+  -- The pull request's diff: the compare page with the PR's threads.
+  diff = {
     { pane = "winbar", needle = "main", group = "ProudAccentText" },
     { pane = "winbar", needle = "feat/task-retry-backoff", group = "ProudSuccessText" },
     { pane = "winbar", needle = "packages/runner/src/config.ts", group = "ProudMuted" },
     { pane = "winbar", needle = "[+", group = "ProudAccentText" },
-    { pane = "line", needle = "maxDelayMs: number", group = "ProudAdd" },
+    { pane = "line", needle = "maxDelayMs: number", group = "ProudAddLine" },
     { pane = "sign", needle = "◆", group = "ProudWarning" },
+    { pane = "sidebar", needle = "Compare", group = "ProudBright" },
+    { pane = "sidebar", needle = "three-dot, from merge base", group = "ProudMuted" },
+    { pane = "sidebar", needle = "#482", group = "ProudMuted" },
+    { pane = "sidebar", needle = "All changes", group = "ProudBright" },
+    { pane = "sidebar", needle = "Add exponential backoff", group = "ProudMuted" },
+    { pane = "sidebar", needle = "+5", group = "ProudSuccessText" },
+    { pane = "sidebar", needle = "◆1", group = "ProudWarning" },
   },
   compare = {
-    { pane = "summary", needle = "Compare", group = "ProudAccentText" },
-    { pane = "summary", needle = "three-dot", group = "ProudAccentText" },
-    { pane = "summary", needle = "main", group = "ProudAccentText" },
-    { pane = "summary", needle = "feat/monitor-diffs", group = "ProudSuccessText" },
-    { pane = "summary", needle = "ahead", group = "ProudSuccessText" },
-    { pane = "summary", needle = "behind", group = "ProudWarning" },
-    { pane = "summary", needle = "local note", group = "ProudMuted" },
-    { pane = "changes", needle = "Commits", group = "ProudAccentText" },
-    { pane = "changes", needle = "9a7d3f0", group = "ProudAccentText" },
-    { pane = "changes", needle = "Files", group = "ProudAccentText" },
-    { pane = "changes", needle = "M monitor/src/diff.ts", group = "ProudAccentText" },
-    { pane = "changes", needle = "+44", group = "ProudSuccessText" },
-    { pane = "changes", needle = "-22", group = "ProudDangerText" },
-    { pane = "changes", needle = "◇1", group = "ProudWarning" },
+    { pane = "sidebar", needle = "Compare", group = "ProudBright" },
+    { pane = "sidebar", needle = "ahead", group = "ProudSuccessText" },
+    { pane = "sidebar", needle = "behind", group = "ProudWarning" },
+    { pane = "sidebar", needle = "no PR yet", group = "ProudMuted" },
+    { pane = "sidebar", needle = "feat/task-retry-backoff", group = "ProudSuccessText" },
+    { pane = "sidebar", needle = "Commits", group = "ProudBright" },
+    { pane = "sidebar", needle = "packages/runner/src/config.ts", group = "ProudBright" },
+    { pane = "sidebar", needle = "+5", group = "ProudSuccessText" },
+    { pane = "sidebar", needle = "−0", group = "ProudDangerText" },
+    { pane = "winbar", needle = "...", group = "ProudMuted" },
+    { pane = "line", needle = "maxDelayMs: number", group = "ProudAddLine" },
   },
   help = {
     { pane = "bindings", needle = "Global", group = "ProudAccentText" },
@@ -93,15 +98,17 @@ local expectations = {
 
 local state = scene == "help" and session.help or session.current and session.current.state
 local workspace = state and (state.workspace or state.surface)
-if not workspace and state and state.scene then
-  -- The editable diff is a scene showing a real file: wait for the
-  -- checkout, then treat its window as a one-pane workspace.
+if state and state.diff and state.diff.scene then
+  -- The compare page: wait for the checkout, then check the sidebar and
+  -- the real file shown in the diff pane ("code").
+  local diff = state.diff
   vim.wait(15000, function()
-    return state.status ~= "loading" and (state.status ~= "ready" or next(state.scene.handles) ~= nil)
+    return diff.status ~= "loading" and (diff.status ~= "ready" or next(diff.scene.handles) ~= nil)
   end, 20)
   workspace = {
     panes = {
-      code = { buffer = vim.api.nvim_win_get_buf(state.scene.window), window = state.scene.window },
+      sidebar = state.workspace.panes.sidebar,
+      code = { buffer = vim.api.nvim_win_get_buf(diff.scene.window), window = diff.scene.window },
     },
   }
 end
