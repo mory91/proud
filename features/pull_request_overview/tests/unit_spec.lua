@@ -19,7 +19,48 @@ return function(test)
   test.highlighted(panes.details, "── Description", "ProudMuted", "description separator is grey")
   test.highlighted(panes.details, "── Conversation 2", "ProudMuted", "conversation separator is grey")
   local cards = view.conversation_cards
-  test.eq(2, #cards, "overview lays out one native card per conversation entry")
+  test.eq(3, #cards, "overview lays out one native card per conversation entry, then the comment box")
+  test.eq("comment_box", cards[3].id, "the comment box ends the conversation")
+  test.eq("ProudCardBorderSelected", cards[3].border_group, "with an accent border, like the design")
+  test.truthy(not table.concat(view.lines, "\n"):find("Comment  draft", 1, true), "the old one-line comment hint is gone")
+
+  -- Navigation items: the description, then every card, in order.
+  test.eq("description", view.items[1].id, "the description is the first item")
+  test.contains(view.lines[view.items[1].first], "── Description", "starting at its separator")
+  test.eq({ "review:100", "comment:201", "comment_box" }, { view.items[2].id, view.items[3].id, view.items[4].id }, "then each card")
+  test.eq(view.items[2], feature.item_at(state, view.items[2].first + 1), "item_at finds the card under a line")
+  test.eq(nil, feature.item_at(state, 1), "nothing above the description")
+  test.eq("description", feature.step_item(state, 1, 1).id, "stepping from the top reaches the description")
+  test.eq("review:100", feature.step_item(state, view.items[1].first, 1).id, "then the first card")
+  test.eq("comment:201", feature.step_item(state, view.items[4].first, -1).id, "and back")
+  test.eq(nil, feature.step_item(state, view.items[4].first, 1), "the comment box is last")
+
+  -- Replies: inline review comments thread to their first comment; the
+  -- rest are quoted.
+  test.eq("> @dev-lee wrote:\n>\n> one\n>\n> two\n\n", feature.quote("dev-lee", "one\n\ntwo"), "quotes like GitHub's quote reply")
+  local root = { source_kind = "review_comment", source_id = "1" }
+  local child = { source_kind = "review_comment", source_id = "2", parent = root }
+  test.eq(root, feature.thread_root(child), "a reply's thread starts at its first comment")
+  test.eq(nil, feature.thread_root({ source_kind = "comment" }), "PR comments have no thread")
+  local under_review = { source_kind = "review_comment", parent = { source_kind = "review" } }
+  test.eq(under_review, feature.thread_root(under_review), "the thread stops at its review")
+
+  -- While writing, the editor gets a slot: at the end for a comment, under
+  -- the thread for a reply.
+  state.composing = { target = "new", height = 4 }
+  local composing_view = feature.render(state)
+  local last = composing_view.conversation_cards[#composing_view.conversation_cards]
+  test.truthy(last.slot and last.height == 4, "a new comment's editor replaces the comment box")
+  state.composing = { target = "review:100", height = 3 }
+  composing_view = feature.render(state)
+  test.eq("comment:201", composing_view.conversation_cards[2].id, "a reply's slot follows the whole thread")
+  test.truthy(composing_view.conversation_cards[3].slot, "slot after the thread")
+  test.eq("comment_box", composing_view.conversation_cards[4].id, "and the comment box stays")
+  state.composing = nil
+  local posted = feature.add_comment(state, { id = 5, author = "morteza", body = "hi" })
+  test.eq("comment:5", posted, "a posted comment gets its card id")
+  test.eq("morteza", feature.render(state).conversation_cards[3].lines[1]:match("morteza"), "and shows")
+  table.remove(state.pull.comments)
   test.contains(table.concat(cards[1].lines, "\n"), "dev-lee  reviewed  change requested  · 1h ago")
   test.contains(table.concat(cards[1].lines, "\n"), "Backoff math is off by one in retry.ts.")
   test.contains(table.concat(cards[2].lines, "\n"), "sara-k  commented  · 40m ago")
@@ -47,7 +88,7 @@ return function(test)
   test.highlighted(card_view, "change requested", "ProudWarning", "change-requested metadata uses warning color")
   for _, width in ipairs({ 72, 120 }) do
     local sized = feature.render(state, width)
-    test.truthy(#sized.conversation_cards == 2, "native card layout survives terminal width " .. width)
+    test.truthy(#sized.conversation_cards == 3, "native card layout survives terminal width " .. width)
     test.truthy(sized.conversation_cards[1].col + sized.conversation_cards[1].width + 2 <= width - 2, "root cards fit inside the padded details pane")
   end
 
@@ -170,7 +211,7 @@ return function(test)
   for _, card in ipairs(colliding_review_view.conversation_cards or {}) do
     table.insert(colliding_review_text, table.concat(card.lines, "\n"))
   end
-  test.eq(4, #colliding_review_view.conversation_cards, "reviews and review comments keep separate identities")
+  test.eq(5, #colliding_review_view.conversation_cards, "reviews and review comments keep separate identities (plus the comment box)")
   test.contains(table.concat(colliding_review_text, "\n"), "First inline review message.")
   test.contains(table.concat(colliding_review_text, "\n"), "Second inline review message.")
 

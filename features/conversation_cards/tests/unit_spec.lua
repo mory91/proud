@@ -179,5 +179,27 @@ return function(test)
   local review_buffer = state.cards.review.buffer
   feature.close(state)
   test.truthy(not vim.api.nvim_buf_is_valid(review_buffer), "close wipes native card buffers")
+
+  -- Slots keep rows free for another window; custom headers and accent
+  -- borders serve the comment box; the selected card gets an accent border.
+  local laid = feature.layout({
+    { id = "a", author = "dev-lee", age = "1h", body = "first" },
+    { id = "slot", slot = true, depth = 1, height = 4 },
+    { id = "box", header_segments = { { text = "Comment", group = "ProudAccentText" } }, body = "Leave a comment", body_group = "ProudMuted", border_group = "ProudCardBorderSelected" },
+  }, { width = 60, start_row = 1, gap = 1 })
+  test.truthy(laid[2].slot, "a slot is laid out")
+  test.eq(4, laid[2].height, "with the height asked for")
+  test.eq(laid[2].row + 4 + 2 + 1, laid[3].row, "and its rows are kept free")
+  test.eq(" Comment", vim.trim(laid[3].lines[1]) == "Comment" and " Comment" or laid[3].lines[1], "a custom header replaces author and age")
+  test.truthy(not laid[3].lines[1]:find("ago", 1, true), "without an age")
+  test.highlighted({ lines = laid[3].lines, highlights = laid[3].highlights, highlight_format = "structured" }, "Leave a comment", "ProudMuted", "the body group is used")
+  local slotted = feature.create({ host_window = host_window })
+  feature.sync(slotted, laid)
+  test.eq(nil, slotted.cards.slot, "slots get no window")
+  test.contains(vim.wo[slotted.cards.box.window].winhighlight, "FloatBorder:ProudCardBorderSelected", "the box keeps its accent border")
+  test.contains(vim.wo[slotted.cards.a.window].winhighlight, "FloatBorder:ProudCardBorder,", "other cards have the plain border")
+  feature.select(slotted, "a")
+  test.contains(vim.wo[slotted.cards.a.window].winhighlight, "FloatBorder:ProudCardBorderSelected", "the selected card gets an accent border")
+  feature.close(slotted)
   vim.cmd("silent! bwipeout!")
 end

@@ -40,6 +40,7 @@ function M.configure(options)
   M.credentials_ready = false
   M.current = nil
   M.provider = provider_module.default(M.options)
+  M.viewer_login = nil
 end
 
 local function with_credentials(action)
@@ -73,6 +74,7 @@ local function with_credentials(action)
       M.options.token = token
       M.options.token_file = nil
       M.provider = provider_module.default(M.options)
+      M.viewer_login = nil
       M.credentials_ready = true
     end,
   }, function(ok, result)
@@ -126,8 +128,13 @@ function M.open_overview(number)
       on_review = function()
         M.open_review(state.pull)
       end,
+      on_comment = M.comment_action(number),
+      viewer = function()
+        return M.viewer_login
+      end,
     })
     M.current = { feature = "pull_request_overview", state = state, buffer = buffer }
+    M.viewer(function() end)
     M.provider:get_pull_request(number, function(ok, pull)
       if not is_current(state) then
         return
@@ -165,15 +172,25 @@ function M.open_diff(number, path, commit)
       pull = known or { number = number, title = "Pull request #" .. tostring(number) },
       cwd = repository(),
     })
+    local diff_view = loader.load("diff_view")
     local buffer = feature.open(state, {
       path = path,
       commit = commit,
       load = known ~= nil,
+      thread_action = M.thread_action(number),
     })
     M.current = { feature = name, state = state, buffer = buffer }
-    M.provider:list_threads(number, function(thread_ok, threads)
+    M.provider:list_threads(number, function(thread_ok, threads, context)
       if M.current and M.current.state == state then
         feature.set_threads(state, thread_ok and threads or {})
+        if thread_ok and context then
+          diff_view.set_review(state.diff, { author = context.author, pending_count = context.pending_count })
+        end
+      end
+    end)
+    M.viewer(function(login)
+      if login then
+        diff_view.set_review(state.diff, { viewer = login })
       end
     end)
     M.provider:get_pull_request(number, function(ok, pull)
@@ -189,6 +206,95 @@ function M.open_diff(number, path, commit)
       feature.load(state, { path = path, commit = commit })
     end)
   end)
+end
+
+-- The signed-in login, fetched once. callback(login or nil).
+function M.viewer(callback)
+  if M.viewer_login then
+    return callback(M.viewer_login)
+  end
+  if not (M.provider and M.provider.auth_status) then
+    return callback(nil)
+  end
+  M.provider:auth_status(function(ok, status)
+    if ok and type(status) == "table" and status.user and status.user ~= "" then
+      M.viewer_login = status.user
+    end
+    callback(M.viewer_login)
+  end)
+end
+
+-- Conversation posts for pull request `number`: kind "comment" posts a
+-- PR comment; kind "reply" replies in the inline thread whose first
+-- comment is `root`. done(ok, { id, author, body } or message). nil when
+-- the provider cannot post, so the overview keeps them local.
+function M.comment_action(number)
+  local provider = M.provider
+  if not (provider and provider.post_comment) then
+    return nil
+  end
+  local function message(value)
+    return type(value) == "table" and (value.message or vim.inspect(value)) or tostring(value)
+  end
+  return function(kind, root, body, done)
+    if kind == "reply" then
+      provider:reply_thread(number, { root_comment_id = root.source_id }, body, function(ok, comment)
+        if not ok then
+          return done(false, message(comment))
+        end
+        done(true, { id = comment.id, author = comment.author ~= "unknown" and comment.author or M.viewer_login, body = comment.body ~= "" and comment.body or body })
+      end)
+      return
+    end
+    provider:post_comment(number, body, function(ok, value)
+      if not ok then
+        return done(false, message(value))
+      end
+      value = type(value) == "table" and value or {}
+      local user = type(value.user) == "table" and value.user.login or nil
+      done(true, { id = value.id, author = user or M.viewer_login, body = value.body or body })
+    end)
+  end
+end
+
+-- Thread replies and resolves for pull request `number` through the
+-- provider (see thread_window for the kinds). nil when the provider
+-- cannot post, so the diff pane keeps them local.
+function M.thread_action(number)
+  local provider = M.provider
+  if not (provider and provider.reply_thread) then
+    return nil
+  end
+  local function message(value)
+    return type(value) == "table" and (value.message or vim.inspect(value)) or tostring(value)
+  end
+  return function(kind, thread, body, done)
+    if kind == "resolve_only" then
+      provider:resolve_thread(number, thread, function(ok, value)
+        done(ok, ok and { resolved = true } or message(value))
+      end)
+    elseif kind == "pending" then
+      provider:add_pending_reply(number, thread, body, function(ok, comment, count)
+        done(ok, ok and { comment = comment, pending_count = count } or message(comment))
+      end)
+    else
+      provider:reply_thread(number, thread, body, function(ok, comment)
+        if not ok then
+          done(false, message(comment))
+        elseif kind == "resolve" then
+          provider:resolve_thread(number, thread, function(resolved, value)
+            if not resolved then
+              -- The reply is posted; say so instead of losing it.
+              fail("Reply posted, but the thread could not be resolved: " .. message(value))
+            end
+            done(true, { comment = comment, resolved = resolved or nil })
+          end)
+        else
+          done(true, { comment = comment })
+        end
+      end)
+    end
+  end
 end
 
 -- Compares two local branches: checks out `head` in place and shows its

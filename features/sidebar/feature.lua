@@ -136,14 +136,18 @@ local function refresh_file_status(state)
   end
 end
 
-function M.overview_nodes(state)
-  local viewed = 0
+-- Changed files grouped under their directory: one expanded `path:<dir>`
+-- node per directory (in first-seen order) holding `file:<path>` leaves.
+-- Shared by the overview and the compare page. options:
+--   sections(file)  the file row's sections (default: the overview's)
+--   spacing         gaps between those sections (default { 2, 2, 2 })
+function M.file_tree(files, options)
+  options = options or {}
+  local sections = options.sections or file_sections
+  local spacing = options.spacing or { 2, 2, 2 }
   local directories = {}
   local directory_order = {}
-  for _, file in ipairs(state.files or {}) do
-    if file.viewed then
-      viewed = viewed + 1
-    end
+  for _, file in ipairs(files or {}) do
     local path = file.path or file.filename or ""
     local directory = vim.fn.fnamemodify(path, ":h")
     if directory == "." then
@@ -157,8 +161,8 @@ function M.overview_nodes(state)
       id = "file:" .. path,
       kind = "file",
       label = vim.fn.fnamemodify(path, ":t"),
-      spacing = { 2, 2, 2 },
-      sections = file_sections(file),
+      spacing = spacing,
+      sections = sections(file),
       payload = {
         path = path,
         file = file,
@@ -166,10 +170,9 @@ function M.overview_nodes(state)
       },
     })
   end
-
-  local file_children = {}
+  local children = {}
   for _, directory in ipairs(directory_order) do
-    table.insert(file_children, {
+    table.insert(children, {
       id = "path:" .. directory,
       kind = "path",
       label = directory,
@@ -179,6 +182,17 @@ function M.overview_nodes(state)
       children = directories[directory],
     })
   end
+  return children
+end
+
+function M.overview_nodes(state)
+  local viewed = 0
+  for _, file in ipairs(state.files or {}) do
+    if file.viewed then
+      viewed = viewed + 1
+    end
+  end
+  local file_children = M.file_tree(state.files)
 
   local commit_children = {}
   for _, commit in ipairs(state.commits or {}) do

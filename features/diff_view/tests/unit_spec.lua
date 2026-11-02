@@ -66,12 +66,10 @@ return function(test)
   end
   local two = feature.thread_view({ state.threads[1], resolved }, 60)
   test.highlighted(two, "resolved", "ProudSuccessText", "resolved threads are shown as resolved")
-  test.truthy(feature.add_reply(state, "Please add a cap."))
-  test.eq(3, #state.threads[1].comments)
   feature.next_thread(state, 1)
-  test.eq(2, state.thread_cursor)
-  test.truthy(feature.resolve(state))
-  test.truthy(state.threads[2].resolved)
+  test.eq(2, state.thread_cursor, "thread navigation wraps forward")
+  state.pending_count = 1
+  test.eq("   review: 1 pending comment", feature.winbar(state, {})[7][1], "the window bar counts pending review comments")
 
   local inline = require("proud.ui.inline_diff")
   local buffer = vim.api.nvim_create_buf(false, true)

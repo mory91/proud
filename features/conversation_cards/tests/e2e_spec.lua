@@ -11,7 +11,7 @@ return function(test)
   end)
   local conversation_cards = require("proud.loader").load("conversation_cards")
   conversation_cards.sync(cards, cards.specs)
-  test.eq(2, vim.tbl_count(cards.cards), "overview opens one native card per conversation entry")
+  test.eq(3, vim.tbl_count(cards.cards), "overview opens one native card per conversation entry, and the comment box")
   for _, card in pairs(cards.cards) do
     local config = vim.api.nvim_win_get_config(card.window)
     test.eq("╭", config.border[1], "conversation cards use Neovim's native rounded border")

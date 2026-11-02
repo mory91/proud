@@ -165,6 +165,66 @@ return function(test)
   fixture_repo.remove(live)
   credentials.reset()
 
+  -- Replies go to GitHub through the session: under the thread's top
+  -- comment, as the signed-in user; <C-r> also resolves the thread.
+  local posting = fixture_repo.create()
+  local posted, resolved_id
+  session.configure({
+    kind = "github",
+    repository = "acme/widget",
+    token = "github_pat_diff_reply",
+    token_path = vim.fn.tempname(),
+    credential = false,
+    cwd = posting.work,
+    client = {
+      get_repository = function(_, callback) callback(true, { full_name = "acme/widget" }) end,
+      get_pull_request = function(_, _, callback) callback(true, vim.deepcopy(fixtures.overview)) end,
+      list_review_threads = function(_, _, callback)
+        callback(true, {
+          id = "PR_1",
+          author = { login = "sara-k" },
+          reviews = { nodes = {} },
+          reviewThreads = { nodes = { {
+            id = "PRRT_1", path = "packages/runner/src/task/retry.ts", line = 14, isResolved = false,
+            comments = { nodes = { { databaseId = 101, body = "Intended?", author = { login = "dev-lee" } } } },
+          } } },
+        })
+      end,
+      reply_to_review_comment = function(_, number, comment_id, body, callback)
+        posted = { number, comment_id, body }
+        callback(true, { id = 202, body = body, user = { login = "morteza" } })
+      end,
+      resolve_review_thread = function(_, thread_id, callback)
+        resolved_id = thread_id
+        callback(true, { id = thread_id, isResolved = true })
+      end,
+      get_authenticated_user = function(_, callback) callback(true, { login = "morteza" }) end,
+    },
+  })
+  session.open_diff(482, "packages/runner/src/task/retry.ts")
+  test.truthy(vim.wait(2000, function() return session.current and session.current.feature == "branch_compare" and session.current.state ~= delayed end, 10), "the diff page opens")
+  local replying = session.current.state
+  test.truthy(vim.wait(15000, function()
+    return ready(replying) and replying.diff.thread_marks and next(replying.diff.thread_marks) ~= nil and replying.diff.viewer == "morteza"
+  end, 20), "the PR's GraphQL threads and the viewer load")
+  test.eq("sara-k", replying.diff.pull_author, "the PR's author is known for tagging")
+  local reply_window = ui.workspace_window(replying.workspace, "diff")
+  vim.api.nvim_set_current_win(reply_window)
+  vim.api.nvim_win_set_cursor(reply_window, { 14, 0 })
+  test.truthy(diff_view.open_thread_window(replying.diff, { reply = true }), "the thread on line 14 opens for a reply")
+  test.contains(lines(replying.diff.thread_window.buffer), "Reply as morteza", "the reply is signed as the viewer")
+  test.contains(lines(ui.workspace_buffer(replying.workspace, "sidebar")), "◆1", "the sidebar counts the open thread")
+  keys("aThanks, fixed.<C-r>")
+  test.truthy(vim.wait(5000, function() return resolved_id ~= nil end, 10), "<C-r> posts and resolves")
+  test.eq({ 482, "101", "Thanks, fixed." }, posted, "the reply goes under the thread's top comment")
+  test.eq("PRRT_1", resolved_id, "the thread is resolved by its id")
+  test.truthy(replying.threads[1].resolved, "the page's thread is resolved")
+  test.truthy(not lines(ui.workspace_buffer(replying.workspace, "sidebar")):find("◆1", 1, true), "the sidebar stops counting it")
+  replying.close()
+  vim.wait(1000, function() return replying.workspace.lifecycle.closed() end, 10)
+  fixture_repo.remove(posting)
+  credentials.reset()
+
   -- The overview starts the checkout; the diff joins it with the
   -- overview's metadata, and can open on one commit.
   local background = fixture_repo.create()

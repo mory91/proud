@@ -387,4 +387,96 @@ return function(test)
   test.eq("M", rest_pull.files[1].status)
   test.eq("Use API", rest_pull.commits[1].message)
   test.eq("pass", rest_pull.checks[1].status)
+
+  -- GraphQL review threads, replies, resolving and pending reviews.
+  local review_threads, review = provider.normalize_review_threads({
+    id = "PR_1",
+    author = { login = "sara-k" },
+    reviews = { nodes = { { id = "PRR_9" } } },
+    reviewThreads = { nodes = {
+      {
+        id = "PRRT_1", isResolved = false, path = "src/retry.ts", line = vim.NIL, originalLine = 14,
+        comments = { nodes = {
+          { id = "PRRC_1", databaseId = 101, body = "Intended?", author = { login = "dev-lee" }, state = "SUBMITTED" },
+          { id = "PRRC_2", databaseId = 102, body = "Later", author = { login = "morteza" }, state = "PENDING" },
+        } },
+      },
+      { id = "PRRT_2", isResolved = true, isOutdated = true, path = "src/config.ts", line = 6, comments = { nodes = {} } },
+    } },
+  })
+  test.eq(2, #review_threads, "GraphQL threads are normalized")
+  test.eq("PRRT_1", review_threads[1].id, "threads keep their node id")
+  test.eq(14, review_threads[1].line, "outdated positions fall back to the original line")
+  test.eq("101", review_threads[1].root_comment_id, "the top comment's id is kept for replies")
+  test.eq("dev-lee", review_threads[1].comments[1].author)
+  test.truthy(review_threads[1].comments[2].pending, "pending comments are marked")
+  test.truthy(review_threads[2].resolved and review_threads[2].outdated, "resolved and outdated states are kept")
+  test.eq({ pull_id = "PR_1", author = "sara-k", pending_review_id = "PRR_9", pending_count = 1 }, review, "the review context is returned")
+
+  local calls = {}
+  local fake = {}
+  local function answer(name, ok, value)
+    fake[name] = function(_, ...)
+      local args = { ... }
+      calls[#calls + 1] = { name, args }
+      local callback = args[#args]
+      vim.schedule(function() callback(ok, value) end)
+    end
+  end
+  answer("list_review_threads", true, { id = "PR_2", author = { login = "sara-k" }, reviews = { nodes = {} }, reviewThreads = { nodes = { {
+    id = "PRRT_5", path = "a.ts", line = 3, comments = { nodes = { { databaseId = 501, body = "Why?", author = { login = "dev-lee" } } } },
+  } } } })
+  answer("reply_to_review_comment", true, { id = 777, body = "Because", user = { login = "morteza" }, created_at = "2026-10-18T12:00:00Z" })
+  answer("resolve_review_thread", true, { id = "PRRT_5", isResolved = true })
+  answer("create_pending_review", true, { id = "PRR_NEW" })
+  answer("add_review_thread_reply", true, { databaseId = 778, body = "Later", author = { login = "morteza" }, state = "PENDING" })
+  answer("submit_pending_review", true, { id = "PRR_NEW", state = "COMMENTED" })
+  answer("submit_pull_request_review", true, { id = 1 })
+  local github_provider = provider.github({ client = fake })
+  local function run(method, ...)
+    local args = { ... }
+    local finished, results = false, nil
+    args[#args + 1] = function(...)
+      finished, results = true, { ... }
+    end
+    github_provider[method](github_provider, unpack(args))
+    vim.wait(1000, function() return finished end, 5)
+    return unpack(results or {})
+  end
+  local listed_ok, listed, context = run("list_threads", 77)
+  test.truthy(listed_ok, "threads load through GraphQL when the client can")
+  test.eq("PRRT_5", listed[1].id)
+  test.eq("PR_2", context.pull_id, "the review context comes with the threads")
+
+  local replied_ok, comment = run("reply_thread", 77, listed[1], "Because")
+  test.truthy(replied_ok, "a reply posts")
+  test.eq({ "reply_to_review_comment", 77, "501", "Because" }, { calls[#calls][1], calls[#calls][2][1], calls[#calls][2][2], calls[#calls][2][3] }, "replies go to the thread's top comment")
+  test.eq("morteza", comment.author, "the posted reply is normalized")
+  test.eq("777", comment.id)
+
+  local resolved_ok = run("resolve_thread", 77, listed[1])
+  test.truthy(resolved_ok, "a thread resolves")
+  test.eq("PRRT_5", calls[#calls][2][1], "resolving uses the thread id")
+
+  local pending_ok, pending_comment, pending_count = run("add_pending_reply", 77, listed[1], "Later")
+  test.truthy(pending_ok, "a reply joins a pending review")
+  test.eq("create_pending_review", calls[#calls - 1][1], "a pending review starts when there is none")
+  test.eq("PR_2", calls[#calls - 1][2][1])
+  test.eq({ "PRRT_5", "Later", "PRR_NEW" }, { calls[#calls][2][1], calls[#calls][2][2], calls[#calls][2][3] })
+  test.truthy(pending_comment.pending, "the reply is pending")
+  test.eq(1, pending_count, "pending replies are counted")
+  run("add_pending_reply", 77, listed[1], "More")
+  test.eq("add_review_thread_reply", calls[#calls][1], "the same pending review is reused")
+  test.eq("PRR_NEW", calls[#calls][2][3])
+
+  run("submit_review", 77, "comment", "Done")
+  test.eq("submit_pending_review", calls[#calls][1], "a pending review is submitted, not replaced")
+  test.eq("PRR_NEW", calls[#calls][2][1])
+  test.eq(0, github_provider:review_context(77).pending_count, "submitting clears the pending count")
+  run("submit_review", 77, "comment", "Again")
+  test.eq("submit_pull_request_review", calls[#calls][1], "without a pending review a new review is created")
+
+  local missing_ok, missing = run("reply_thread", 77, { comments = {} }, "x")
+  test.truthy(not missing_ok, "threads without ids cannot be replied to")
+  test.contains(missing.message, "cannot be replied to")
 end

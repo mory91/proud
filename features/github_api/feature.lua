@@ -1022,6 +1022,182 @@ query ProudPullRequestChecks($owner: String!, $name: String!, $number: Int!, $fi
     }, callback)
   end
 
+  -- GraphQL request; `callback(true, data)` or `(false, error)` with
+  -- GitHub's first error message.
+  function client:graphql(query, variables, callback)
+    return self:request_json({
+      method = "POST",
+      path = "/graphql",
+      body = { query = query, variables = variables or {} },
+      skip_cache = true,
+    }, function(ok, value)
+      if not ok then
+        callback(false, value)
+        return
+      end
+      local errors = type(value) == "table" and value.errors
+      if type(errors) == "table" and #errors > 0 then
+        callback(false, {
+          code = value.code or 502,
+          message = errors[1].message or "GitHub GraphQL request failed",
+          body = value,
+        })
+        return
+      end
+      if type(value) ~= "table" or type(value.data) ~= "table" then
+        callback(false, { code = 502, message = "GitHub GraphQL returned no data", body = value })
+        return
+      end
+      callback(true, value.data)
+    end)
+  end
+
+  local function with_owner(callback, continue)
+    client:resolve_repository(function(repository)
+      local owner, name = tostring(repository or ""):match("^([^/]+)/([^/]+)$")
+      if not owner then
+        callback(false, { code = 0, message = "Could not resolve the GitHub repository from git remote origin" })
+        return
+      end
+      client.repository = repository
+      continue(owner, name)
+    end)
+  end
+
+  -- Review threads with ids and resolved state, the pull request's node id
+  -- and author, and the viewer's pending review (GitHub shows a pending
+  -- review only to its author). First 100 threads and 100 comments each.
+  function client:list_review_threads(number, callback)
+    with_owner(callback, function(owner, name)
+      self:graphql([=[
+query ProudReviewThreads($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      id
+      author { login }
+      reviews(states: [PENDING], first: 1) { nodes { id databaseId } }
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          isOutdated
+          path
+          line
+          originalLine
+          comments(first: 100) {
+            nodes { id databaseId body createdAt state author { login } }
+          }
+        }
+      }
+    }
+  }
+}
+]=], { owner = owner, name = name, number = math.floor(tonumber(number) or 0) }, function(ok, data)
+        if not ok then
+          callback(false, data)
+          return
+        end
+        local pull = type(data.repository) == "table" and data.repository.pullRequest
+        if type(pull) ~= "table" then
+          callback(false, { code = 404, message = "GitHub returned no pull request #" .. tostring(number) })
+          return
+        end
+        callback(true, pull)
+      end)
+    end)
+  end
+
+  -- Replies to the thread that `comment_id` (a review comment's database
+  -- id) belongs to; GitHub threads the reply under the top comment.
+  function client:reply_to_review_comment(number, comment_id, body, callback)
+    return self:request({
+      method = "POST",
+      path = repository_path(("/pulls/%d/comments/%s/replies"):format(number, tostring(comment_id))),
+      body = { body = body },
+      skip_cache = true,
+    }, callback)
+  end
+
+  function client:resolve_review_thread(thread_id, callback)
+    return self:graphql([=[
+mutation ProudResolveThread($thread: ID!) {
+  resolveReviewThread(input: { threadId: $thread }) { thread { id isResolved } }
+}
+]=], { thread = thread_id }, function(ok, data)
+      if not ok then
+        callback(false, data)
+        return
+      end
+      callback(true, (data.resolveReviewThread or {}).thread or {})
+    end)
+  end
+
+  -- Starts the viewer's pending review on a pull request (by node id).
+  function client:create_pending_review(pull_id, callback)
+    return self:graphql([=[
+mutation ProudPendingReview($pull: ID!) {
+  addPullRequestReview(input: { pullRequestId: $pull }) { pullRequestReview { id databaseId } }
+}
+]=], { pull = pull_id }, function(ok, data)
+      if not ok then
+        callback(false, data)
+        return
+      end
+      local review = (data.addPullRequestReview or {}).pullRequestReview
+      if type(review) ~= "table" or not review.id then
+        callback(false, { code = 502, message = "GitHub did not return the pending review" })
+        return
+      end
+      callback(true, review)
+    end)
+  end
+
+  -- Adds a reply to a thread inside the pending review `review_id`.
+  function client:add_review_thread_reply(thread_id, body, review_id, callback)
+    return self:graphql([=[
+mutation ProudPendingReply($thread: ID!, $body: String!, $review: ID) {
+  addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: $thread, body: $body, pullRequestReviewId: $review }) {
+    comment { id databaseId body createdAt state author { login } }
+  }
+}
+]=], { thread = thread_id, body = body, review = review_id }, function(ok, data)
+      if not ok then
+        callback(false, data)
+        return
+      end
+      local comment = (data.addPullRequestReviewThreadReply or {}).comment
+      if type(comment) ~= "table" then
+        callback(false, { code = 502, message = "GitHub did not return the reply" })
+        return
+      end
+      callback(true, comment)
+    end)
+  end
+
+  -- Submits the pending review `review_id` with an event and body.
+  function client:submit_pending_review(review_id, event, body, callback)
+    local normalized_event = M.normalize_review_event(event)
+    if not normalized_event then
+      vim.schedule(function()
+        callback(false, { code = 0, message = "Review event must be comment, approve, or request changes" })
+      end)
+      return function() end
+    end
+    return self:graphql([=[
+mutation ProudSubmitReview($review: ID!, $event: PullRequestReviewEvent!, $body: String) {
+  submitPullRequestReview(input: { pullRequestReviewId: $review, event: $event, body: $body }) {
+    pullRequestReview { id databaseId state }
+  }
+}
+]=], { review = review_id, event = normalized_event, body = tostring(body or "") }, function(ok, data)
+      if not ok then
+        callback(false, data)
+        return
+      end
+      callback(true, (data.submitPullRequestReview or {}).pullRequestReview or {})
+    end)
+  end
+
   function client:get_authenticated_user(callback)
     self:request_json({ method = "GET", path = "/user" }, callback)
   end

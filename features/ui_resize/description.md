@@ -13,4 +13,4 @@ Each scene receives a unique lifecycle identity on its tabpage, buffers, and win
 - `tests/e2e_spec.lua` verifies relayout, buffer-deletion cleanup, pre-cleanup quit, and replacement ownership in real Neovim windows.
 - `tests/terminal/scene_lifecycle_test.exp` drives `:bd` through a pseudo-terminal and confirms replacement scenes survive stale cleanup.
 - `tests/terminal/browser_size_test.exp` drives terminal size changes and checks live geometry.
-- `bench/benchmark.lua` measures repeated relayout work under an explicit SLA.
+- `bench/benchmark.lua` measures repeated relayout work under an explicit SLA. Workspaces also re-fit when another window opens or closes beside their panes in the same tab (another plugin's panel, or a split a failed command left behind): those windows keep their width, the panes share the remaining columns by weight, and get them all back when the windows close. Floats and splits inside a pane's column take no columns away.

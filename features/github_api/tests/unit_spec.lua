@@ -370,4 +370,78 @@ return function(test)
   test.contains(first_check_body.query, "pullRequest(number: $number)")
   test.contains(first_check_body.query, "statusCheckRollup")
   test.eq("check-page-2", second_check_body.variables.after)
+
+  -- Review threads, replies, resolving and pending reviews.
+  local function call(method, ...)
+    local args = { ... }
+    local finished, result_ok, result = false
+    args[#args + 1] = function(ok, value)
+      finished, result_ok, result = true, ok, value
+    end
+    client[method](client, unpack(args))
+    vim.wait(1000, function() return finished end, 10)
+    return result_ok, result, requests[#requests]
+  end
+  local function graphql_body(request)
+    return vim.json.decode(request.body)
+  end
+
+  table.insert(replies, { code = 200, stdout = vim.json.encode({ data = { repository = { pullRequest = {
+    id = "PR_1",
+    author = { login = "sara-k" },
+    reviews = { nodes = { { id = "PRR_9", databaseId = 9 } } },
+    reviewThreads = { nodes = { {
+      id = "PRRT_1", isResolved = false, isOutdated = false, path = "src/retry.ts", line = 14,
+      comments = { nodes = { { id = "PRRC_1", databaseId = 101, body = "Intended?", createdAt = "2026-10-18T12:00:00Z", state = "SUBMITTED", author = { login = "dev-lee" } } } },
+    } } },
+  } } } }) })
+  local threads_ok, pull, threads_request = call("list_review_threads", 482)
+  test.truthy(threads_ok, "review threads load")
+  test.eq("/graphql", threads_request.path)
+  test.eq("POST", threads_request.method)
+  test.contains(graphql_body(threads_request).query, "reviewThreads", "threads come from GraphQL")
+  test.eq({ owner = "acme", name = "widget", number = 482 }, graphql_body(threads_request).variables)
+  test.eq("PRRT_1", pull.reviewThreads.nodes[1].id, "thread ids are returned")
+
+  table.insert(replies, { code = 201, stdout = '{"id": 202, "body": "Agreed", "user": {"login": "morteza"}}' })
+  local reply_ok, reply, reply_request = call("reply_to_review_comment", 482, 101, "Agreed")
+  test.truthy(reply_ok, "replies post")
+  test.eq(202, reply.id)
+  test.eq("POST", reply_request.method)
+  test.contains(reply_request.path, "/repos/acme/widget/pulls/482/comments/101/replies", "replies go under the thread's top comment")
+  test.eq({ body = "Agreed" }, vim.json.decode(reply_request.body))
+
+  table.insert(replies, { code = 200, stdout = '{"data": {"resolveReviewThread": {"thread": {"id": "PRRT_1", "isResolved": true}}}}' })
+  local resolve_ok, resolved, resolve_request = call("resolve_review_thread", "PRRT_1")
+  test.truthy(resolve_ok and resolved.isResolved, "threads resolve")
+  test.contains(graphql_body(resolve_request).query, "resolveReviewThread")
+  test.eq({ thread = "PRRT_1" }, graphql_body(resolve_request).variables)
+
+  table.insert(replies, { code = 200, stdout = '{"data": {"addPullRequestReview": {"pullRequestReview": {"id": "PRR_10", "databaseId": 10}}}}' })
+  local review_ok, pending, pending_request = call("create_pending_review", "PR_1")
+  test.truthy(review_ok, "a pending review starts")
+  test.eq("PRR_10", pending.id)
+  test.eq({ pull = "PR_1" }, graphql_body(pending_request).variables)
+  test.truthy(not graphql_body(pending_request).query:find("event", 1, true), "a review without an event stays pending")
+
+  table.insert(replies, { code = 200, stdout = '{"data": {"addPullRequestReviewThreadReply": {"comment": {"id": "PRRC_2", "databaseId": 103, "body": "Later", "state": "PENDING"}}}}' })
+  local pending_ok, pending_comment, pending_reply = call("add_review_thread_reply", "PRRT_1", "Later", "PRR_10")
+  test.truthy(pending_ok and pending_comment.state == "PENDING", "replies can join the pending review")
+  test.eq({ thread = "PRRT_1", body = "Later", review = "PRR_10" }, graphql_body(pending_reply).variables)
+
+  table.insert(replies, { code = 200, stdout = '{"data": {"submitPullRequestReview": {"pullRequestReview": {"id": "PRR_10", "state": "COMMENTED"}}}}' })
+  local submit_ok, submitted, submit_request = call("submit_pending_review", "PRR_10", "comment", "Looks good")
+  test.truthy(submit_ok and submitted.state == "COMMENTED", "the pending review is submitted")
+  test.eq({ review = "PRR_10", event = "COMMENT", body = "Looks good" }, graphql_body(submit_request).variables)
+
+  local before = #requests
+  local invalid_submit_ok, invalid_submit = call("submit_pending_review", "PRR_10", "dismiss", "")
+  test.truthy(not invalid_submit_ok, "invalid events are rejected")
+  test.contains(invalid_submit.message, "comment, approve, or request changes")
+  test.eq(before, #requests, "invalid events never reach GitHub")
+
+  table.insert(replies, { code = 200, stdout = '{"errors": [{"message": "Resource not accessible by integration"}]}' })
+  local denied_ok, denied = call("resolve_review_thread", "PRRT_1")
+  test.truthy(not denied_ok, "GraphQL errors fail the call")
+  test.eq("Resource not accessible by integration", denied.message, "GitHub's message is kept")
 end

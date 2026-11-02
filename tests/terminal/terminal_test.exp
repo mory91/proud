@@ -65,6 +65,15 @@ send "Kq"
 send {:lua local s=require('proud.session').current.state.diff; local ok=s.thread_window==nil and vim.api.nvim_get_current_win()==s.scene.window and vim.fn.line('.')==6; vim.api.nvim_echo({{('THREAD_WINDOW_OK='..tostring(ok))}},false,{})}
 send "\r"
 wait_for {THREAD_WINDOW_OK=true} "K focuses and q closes the thread window"
+send "KKr"
+wait_for {suggestion} "reply editor header"
+send "Looks good to me"
+wait_for {draft} "reply editor keys"
+send "\x13"
+send {:lua local s=require('proud.session').current.state.diff; vim.wait(2000,function() return s.thread_window and s.thread_window.editor==nil end,20); local t=s.threads[2]; local ok=#t.comments==2 and t.comments[2].body=='Looks good to me' and vim.api.nvim_get_current_win()==s.thread_window.window; vim.api.nvim_echo({{('REPLY_OK='..tostring(ok))}},false,{})}
+send "\r"
+wait_for {REPLY_OK=true} "a reply is posted from the thread window"
+send "q"
 
 command ":Proud demo compare\r\x0c" {Compare[^\r\n]*merge base} "branch compare"
 send {:lua local s=require('proud.session').current.state; vim.wait(15000,function() return not s.loading and s.diff.status~='loading' end,20); vim.api.nvim_set_current_win(require('proud.ui').workspace_window(s.workspace,'sidebar')); vim.api.nvim_echo({{'COMPARE_READY='..s.diff.status}},false,{})}
