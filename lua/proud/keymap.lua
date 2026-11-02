@@ -29,6 +29,8 @@ local definitions = {
   next_file = { group = "Diff", description = "Select the next file", keys = { "]f" } },
   previous_file = { group = "Diff", description = "Select the previous file", keys = { "[f" } },
   select_file = { group = "Diff", description = "Select the focused file", keys = { "<CR>" } },
+  show_thread = { group = "Diff", description = "Show the full review thread on this line (again to focus it)", keys = { "K" } },
+  close_thread = { group = "Diff", description = "Close the thread window", keys = { "q", "<Esc>" } },
   next_thread = { group = "Diff", description = "Select the next review thread", keys = { "]t" } },
   previous_thread = { group = "Diff", description = "Select the previous review thread", keys = { "[t" } },
   reply = { group = "Diff", description = "Reply to the selected thread", keys = { "r" } },

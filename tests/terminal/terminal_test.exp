@@ -53,9 +53,18 @@ command ":Proud demo diff\r\x0c" {#482 compare} "pull request diff page"
 command ":lua local s=require('proud.session').current.state.diff; vim.wait(15000,function() return s.status~='loading' and next(s.scene.handles)~=nil end,20); vim.api.nvim_set_current_win(s.scene.window); vim.api.nvim_echo({{'DIFF_READY='..s.status}},false,{})\r" {DIFF_READY=ready} "editable diff loaded"
 command "\]f\x0c" {withRetry} "file diff file navigation"
 command "\]t\x0c" {#482 compare} "thread navigation refresh"
-send {:lua local s=require('proud.session').current.state.diff; local ok=s.thread_cursor==2 and s.threads[2].path=='packages/runner/src/config.ts'; vim.api.nvim_echo({{('THREAD_OK='..tostring(ok))}},false,{})}
+send {:lua local s=require('proud.session').current.state.diff; vim.wait(5000,function() return s.file_cursor==1 and vim.api.nvim_win_get_cursor(s.scene.window)[1]==6 end,20); local ok=s.thread_cursor==2 and s.threads[2].path=='packages/runner/src/config.ts' and vim.api.nvim_win_get_cursor(s.scene.window)[1]==6; vim.api.nvim_echo({{('THREAD_OK='..tostring(ok))}},false,{})}
 send "\r"
 wait_for {THREAD_OK=true} "thread cursor moved to config.ts"
+send "K"
+wait_for {conservative default\?} "thread window shows the full comment"
+send {:lua local s=require('proud.session').current.state.diff; local w=s.thread_window; vim.api.nvim_echo({{'THREAD_OPEN='..tostring(w~=nil and vim.api.nvim_get_current_win()==s.scene.window)}},false,{})}
+send "\r"
+wait_for {THREAD_OPEN=true} "K opens the thread window without taking focus"
+send "Kq"
+send {:lua local s=require('proud.session').current.state.diff; local ok=s.thread_window==nil and vim.api.nvim_get_current_win()==s.scene.window and vim.fn.line('.')==6; vim.api.nvim_echo({{('THREAD_WINDOW_OK='..tostring(ok))}},false,{})}
+send "\r"
+wait_for {THREAD_WINDOW_OK=true} "K focuses and q closes the thread window"
 
 command ":Proud demo compare\r\x0c" {Compare[^\r\n]*merge base} "branch compare"
 send {:lua local s=require('proud.session').current.state; vim.wait(15000,function() return not s.loading and s.diff.status~='loading' end,20); vim.api.nvim_set_current_win(require('proud.ui').workspace_window(s.workspace,'sidebar')); vim.api.nvim_echo({{'COMPARE_READY='..s.diff.status}},false,{})}
