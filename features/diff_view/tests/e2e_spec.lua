@@ -95,6 +95,56 @@ return function(test)
   test.truthy(vim.wait(5000, function() return state.file_cursor == 2 and vim.api.nvim_win_get_cursor(window)[1] == 14 end, 20), "]t jumps to the thread's line")
   local retry_buffer = vim.api.nvim_win_get_buf(window)
 
+  -- K on a thread's line opens the full thread in a float beside it.
+  local function floats()
+    local found = {}
+    for _, candidate in ipairs(vim.api.nvim_tabpage_list_wins(tabpage)) do
+      if vim.api.nvim_win_get_config(candidate).relative ~= "" then
+        found[#found + 1] = candidate
+      end
+    end
+    return found
+  end
+  local function float_text()
+    local float = state.thread_window and state.thread_window.window
+    return float and table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(float), 0, -1, false), "\n") or ""
+  end
+  vim.api.nvim_set_current_win(window)
+  vim.api.nvim_feedkeys("K", "x", false)
+  test.eq(1, #floats(), "K opens one thread window")
+  test.eq(window, vim.api.nvim_get_current_win(), "the thread window opens without taking focus")
+  local thread_text = float_text()
+  test.contains(thread_text, "retry.ts:14", "the thread window names the thread's line")
+  test.contains(thread_text, "attempt is already incremented here", "the first comment is shown")
+  test.contains(thread_text:gsub("%s+", " "), "Fixing in the next push.", "replies are shown in full")
+  local config = vim.api.nvim_win_get_config(state.thread_window.window)
+  test.eq(window, config.win, "the thread window is placed in the diff window")
+  test.eq(13, config.bufpos[1], "the thread window is anchored to the thread's line")
+  vim.api.nvim_feedkeys("K", "x", false)
+  test.eq(state.thread_window.window, vim.api.nvim_get_current_win(), "K again focuses the thread window")
+  vim.api.nvim_feedkeys("q", "x", false)
+  test.eq(0, #floats(), "q closes the thread window")
+  test.eq(window, vim.api.nvim_get_current_win(), "closing returns to the diff")
+  test.eq(nil, state.thread_window, "the thread window is forgotten")
+
+  vim.api.nvim_feedkeys("K", "x", false)
+  vim.api.nvim_feedkeys("j", "x", false)
+  vim.api.nvim_exec_autocmds("CursorMoved", { buffer = retry_buffer })
+  test.eq(0, #floats(), "moving off the line closes the thread window")
+  test.eq(false, feature.open_thread_window(state), "lines without a thread open nothing")
+  test.eq(0, #floats(), "no window is left behind")
+
+  vim.api.nvim_win_set_cursor(window, { 14, 0 })
+  vim.api.nvim_feedkeys("K", "x", false)
+  vim.api.nvim_feedkeys("]t", "x", false)
+  test.truthy(vim.wait(5000, function() return state.file_cursor == 1 and state.thread_window ~= nil and state.thread_window.row == 5 end, 20), "]t moves the open thread window to the next thread")
+  test.eq(1, #floats(), "only one thread window is open")
+  test.contains(float_text(), "config.ts:6", "the window shows the next thread")
+  vim.api.nvim_feedkeys("[t", "x", false)
+  test.truthy(vim.wait(5000, function() return state.file_cursor == 2 and state.thread_window ~= nil and state.thread_window.row == 13 end, 20), "[t brings it back")
+  test.eq(1, #floats(), "switching files keeps one thread window")
+  retry_buffer = vim.api.nvim_win_get_buf(window)
+
   -- One commit against its parent: a read-only snapshot, no threads.
   local commits = await(function(done) git.log(repo.work, base .. "..HEAD", done) end)
   test.eq(2, #commits, "the branch has two commits")
@@ -120,6 +170,7 @@ return function(test)
   test.truthy(current_handle ~= nil, "current() reports its diff")
 
   -- Cleanup, as a host does on close.
+  test.eq(nil, state.thread_window, "showing a commit closes the thread window")
   feature.detach(state)
   vim.cmd("tabclose")
   feature.unload(state)

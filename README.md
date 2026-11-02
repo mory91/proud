@@ -102,7 +102,7 @@ Every feature is self-contained in `features/<feature>/` with:
 | `github_credentials` | Centered credential modal, validation, secure persistence, and reuse |
 | `pull_request_browser` | Query, preview, and open pull requests |
 | `pull_request_overview` | Description, files, commits, checks, and conversation |
-| `diff_view` | Diff pane: real editable files or one commit's change, live inline diff, thread signs |
+| `diff_view` | Diff pane: real editable files or one commit's change, live inline diff, thread signs, thread window (`K`) |
 | `review_submission` | Comment, approve, and request-changes review submission |
 | `branch_compare` | Compare page (and every PR diff): sidebar with info, commits and files, next to the diff pane |
 | `keymap_help` | Remappable key and command reference |

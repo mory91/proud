@@ -12,3 +12,5 @@ Inline `ProudDeleteLine`/`ProudAddLine` decorations (background only, so syntax 
 
 The real-terminal contract checks the full source text, add/delete palette, window bar and file navigation at four terminal sizes via `tests/terminal/run.sh`.
 The lifecycle E2E repeatedly opens and closes the pull request's diff page through real terminal input, verifies retained heap growth/trend within `64 KiB`, and rejects retained buffers or windows.
+
+The thread window must be covered by unit tests (full, wrapped comment text, reply marking, state colors) and E2E tests in a real window: `K` opens one unfocused float anchored to the thread's line, `K` again focuses it, `q` closes it and returns to the diff, moving off the line closes it, `]t` / `[t` move it across files, and switching to a commit or closing the host leaves no float behind. The real-terminal suite must show the full comment on screen.

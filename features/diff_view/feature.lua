@@ -19,7 +19,8 @@ local M = {}
 
 M.thread_namespace = vim.api.nvim_create_namespace("proud_diff_threads")
 local PREVIEW_CHARS = 32
-local FILE_ACTIONS = { "next_file", "previous_file", "next_thread", "previous_thread" }
+local FILE_ACTIONS = { "next_file", "previous_file", "next_thread", "previous_thread", "show_thread" }
+local THREAD_WINDOW_WIDTH = 84
 
 -- options: cwd, threads, title (e.g. "#482" or "main...feature", used in
 -- status messages).
@@ -68,49 +69,6 @@ function M.next_thread(state, delta)
     return
   end
   state.thread_cursor = (state.thread_cursor - 1 + delta) % #state.threads + 1
-end
-
--- Rule width when no pane width is known (tests, benchmarks).
-local DEFAULT_RULE_WIDTH = 112
-
--- A separator `width` cells wide whose first `head` cells are muted.
-local function add_rule(v, width, head)
-  width = math.max(1, math.floor(width or DEFAULT_RULE_WIDTH))
-  head = math.min(head, width)
-  v:spans(string.rep("─", head), "ProudMuted", string.rep("─", width - head))
-end
-
--- Text view of the selected thread (kept for the thread window, #40).
-function M.render_thread(state, width)
-  local v = ui.view.new()
-  local current_thread = state.threads[state.thread_cursor]
-  v:blank()
-  if current_thread then
-    local resolved = current_thread.resolved
-    v:spans(
-      resolved and "◇ resolved" or "◆ Thread", resolved and "ProudSuccessText" or "ProudWarning",
-      "  ", nil,
-      vim.fn.fnamemodify(current_thread.path, ":t"), "ProudBright",
-      ":" .. current_thread.line .. "  · ", nil,
-      resolved and "resolved" or "unresolved", resolved and "ProudSuccessText" or "ProudDangerText",
-      (" · %d comments"):format(#current_thread.comments)
-    )
-    for _, comment in ipairs(current_thread.comments) do
-      v:spans(comment.author, "ProudAccentText", "  ", nil, comment.age, "ProudMuted")
-      v:spans("  " .. comment.body)
-    end
-  else
-    v:spans("No review threads", "ProudMuted")
-  end
-  add_rule(v, width, 18)
-  v:spans("Reply as you", "ProudMuted", "  · markdown  · @ mention")
-  if state.draft ~= "" then
-    v:spans(state.draft)
-  else
-    v:spans("Write a reply...", "ProudMuted")
-  end
-  v:spans("Draft ready", "ProudAccentText", "  ·  ", nil, "resolve", "ProudSuccessText", " when the thread is complete")
-  return v:build()
 end
 
 -- First comment of an open thread, shortened for the end-of-line preview.
@@ -205,6 +163,210 @@ function M.place_threads(state, buffer, file)
   end
 end
 
+-- Threads whose marks sit on buffer row `row` (0-based) of the shown file.
+function M.threads_at(state, buffer, row)
+  local found = {}
+  for _, thread in ipairs(state.threads) do
+    local mark = state.thread_marks and state.thread_marks[thread]
+    if mark then
+      local position = vim.api.nvim_buf_get_extmark_by_id(buffer, M.thread_namespace, mark, {})
+      if position[1] == row then
+        found[#found + 1] = thread
+      end
+    end
+  end
+  return found
+end
+
+-- Full text of `threads` (those on one line) for the thread window, wrapped
+-- to `width` cells: a header per thread, then every comment in full.
+function M.thread_view(threads, width)
+  width = math.max(20, math.floor(width or THREAD_WINDOW_WIDTH))
+  local v = ui.view.new()
+  for index, thread in ipairs(threads) do
+    if index > 1 then
+      v:blank()
+    end
+    local resolved = thread.resolved
+    local comments = thread.comments or {}
+    v:spans(
+      " ", nil,
+      resolved and "◇ " or "◆ ", resolved and "ProudSuccessText" or "ProudWarning",
+      vim.fn.fnamemodify(thread.path or "", ":t") .. ":" .. tostring(thread.line or "?"), "ProudBright",
+      "  · ", "ProudMuted",
+      resolved and "resolved" or "unresolved", resolved and "ProudSuccessText" or "ProudDangerText",
+      ("  · %d comment%s"):format(#comments, #comments == 1 and "" or "s"), "ProudMuted"
+    )
+    for position, comment in ipairs(comments) do
+      -- Replies are indented under the comment that opened the thread.
+      local indent = position == 1 and " " or "   "
+      v:blank()
+      v:spans(
+        indent, nil,
+        position == 1 and "" or "↳ ", "ProudMuted",
+        tostring(comment.author or "unknown"), "ProudAccentText",
+        "  · " .. tostring(comment.age or ""), "ProudMuted"
+      )
+      local body = tostring(comment.body or "")
+      if body == "" then
+        v:spans(indent, nil, "(no message)", "ProudMuted")
+      end
+      local body_indent = position == 1 and indent or indent .. "  "
+      for paragraph in (body .. "\n"):gmatch("(.-)\r?\n") do
+        if paragraph == "" then
+          if body ~= "" then
+            v:blank()
+          end
+        else
+          for _, line in ipairs(ui.wrap_text(paragraph, width - #body_indent - 1, { wrap = true })) do
+            v:spans(body_indent, nil, line, "ProudText")
+          end
+        end
+      end
+    end
+  end
+  return v:build()
+end
+
+-- Closes the thread window, if open.
+function M.close_thread_window(state)
+  local thread_window = state.thread_window
+  state.thread_window = nil
+  if not thread_window then
+    return
+  end
+  pcall(vim.api.nvim_del_augroup_by_id, thread_window.group)
+  if vim.api.nvim_win_is_valid(thread_window.window) then
+    pcall(vim.api.nvim_win_close, thread_window.window, true)
+  end
+  if vim.api.nvim_buf_is_valid(thread_window.buffer) then
+    pcall(vim.api.nvim_buf_delete, thread_window.buffer, { force = true })
+  end
+end
+
+-- Opens a floating window with the full threads on the cursor's line,
+-- next to that line. When it is already open for that line, focuses it
+-- (like K for LSP hover). options.focus focuses it right away. Returns
+-- false when the line has no thread.
+function M.open_thread_window(state, options)
+  options = options or {}
+  if not alive(state) or state.status ~= "ready" then
+    return false
+  end
+  local scene = state.scene
+  local window = scene.window
+  local shown = current_buffer(state)
+  local row = vim.api.nvim_win_get_cursor(window)[1] - 1
+  local open = state.thread_window
+  if open and vim.api.nvim_win_is_valid(open.window) and open.row == row and open.shown == shown then
+    vim.api.nvim_set_current_win(open.window)
+    return true
+  end
+  local threads = M.threads_at(state, shown, row)
+  M.close_thread_window(state)
+  if #threads == 0 then
+    return false
+  end
+
+  local info = vim.fn.getwininfo(window)[1] or { width = vim.api.nvim_win_get_width(window), textoff = 0 }
+  local width = math.max(20, math.min(THREAD_WINDOW_WIDTH, info.width - info.textoff - 3))
+  local view = M.thread_view(threads, width)
+  -- Below the line when it fits, else above when there is more room.
+  local window_height = vim.api.nvim_win_get_height(window)
+  local line_row = vim.fn.winline() - 1
+  if vim.api.nvim_get_current_win() ~= window then
+    line_row = math.max(0, row - (vim.fn.line("w0", window) - 1))
+  end
+  local below = window_height - line_row - 3
+  local above = line_row - 2
+  local place_above = below < math.min(#view.lines, 8) and above > below
+  local rows = 0
+  for _, line in ipairs(view.lines) do
+    rows = rows + math.max(1, math.ceil(vim.fn.strdisplaywidth(line) / width))
+  end
+  local height = math.max(1, math.min(rows, math.floor(window_height * 0.6), place_above and above or below))
+
+  local buffer = vim.api.nvim_create_buf(false, true)
+  vim.bo[buffer].bufhidden = "wipe"
+  vim.bo[buffer].filetype = "proud-thread"
+  ui.render(buffer, view)
+  vim.bo[buffer].modifiable = false
+  local float = vim.api.nvim_open_win(buffer, false, {
+    relative = "win",
+    win = window,
+    bufpos = { row, 0 },
+    row = place_above and 0 or 1,
+    col = 0,
+    anchor = place_above and "SW" or "NW",
+    width = width,
+    height = height,
+    style = "minimal",
+    border = "rounded",
+    title = { { #threads > 1 and (" %d threads "):format(#threads) or " Thread ", "ProudMuted" } },
+    title_pos = "left",
+    footer = { { " K focus · q close ", "ProudMuted" } },
+    footer_pos = "right",
+    focusable = true,
+    zindex = 60,
+  })
+  ui.winhighlight(float, { NormalFloat = "ProudCard", FloatBorder = "ProudCardBorder", FloatTitle = "ProudMuted", FloatFooter = "ProudMuted" })
+  -- Comments are wrapped already; wrap lets a long header fit narrow windows.
+  vim.wo[float].wrap = true
+  vim.wo[float].linebreak = true
+  vim.wo[float].cursorline = false
+
+  local group = vim.api.nvim_create_augroup("ProudThreadWindow" .. float, { clear = true })
+  state.thread_window = { window = float, buffer = buffer, row = row, shown = shown, group = group, threads = threads }
+  local function close()
+    if state.thread_window and state.thread_window.window == float then
+      M.close_thread_window(state)
+    end
+  end
+  -- Closes when the cursor leaves the line, on edits, or when the diff
+  -- window shows another buffer or closes.
+  vim.api.nvim_create_autocmd({ "CursorMoved" }, {
+    group = group,
+    buffer = shown,
+    callback = function()
+      if vim.api.nvim_get_current_win() == window and vim.api.nvim_win_get_cursor(window)[1] - 1 ~= row then
+        close()
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd({ "InsertEnter", "BufWinLeave" }, { group = group, buffer = shown, callback = close })
+  vim.api.nvim_create_autocmd("WinClosed", { group = group, pattern = tostring(window), callback = close })
+  -- Leaving the focused window closes it, like LSP hover.
+  vim.api.nvim_create_autocmd("WinLeave", {
+    group = group,
+    buffer = buffer,
+    callback = function()
+      vim.schedule(close)
+    end,
+  })
+  -- K inside the window has nothing more to show (and must not run
+  -- keywordprg on the comment text).
+  keymap.map(buffer, "n", "show_thread", function() end, "Already showing the thread")
+  keymap.map(buffer, "n", "close_thread", function()
+    close()
+    if vim.api.nvim_win_is_valid(window) then
+      vim.api.nvim_set_current_win(window)
+    end
+  end, "Close the thread window")
+  if options.focus then
+    vim.api.nvim_set_current_win(float)
+  end
+  return true
+end
+
+-- K where the line has no thread: LSP hover, else Neovim's K.
+local function hover_fallback(buffer)
+  if #vim.lsp.get_clients({ bufnr = buffer }) > 0 then
+    vim.lsp.buf.hover()
+  else
+    pcall(vim.cmd, "normal! K")
+  end
+end
+
 local function unmap_actions(buffer, actions)
   for _, action in ipairs(actions or {}) do
     keymap.unmap(buffer, "n", action)
@@ -214,6 +376,9 @@ end
 -- Detaches the diff, thread marks and mappings from `buffer`.
 local function release_buffer(state, buffer)
   local scene = state.scene
+  if state.thread_window and state.thread_window.shown == buffer then
+    M.close_thread_window(state)
+  end
   local handle = scene.handles[buffer]
   if handle then
     handle.detach()
@@ -249,6 +414,11 @@ local function map_file_keys(state, buffer)
   keymap.map(buffer, "n", "previous_thread", function()
     M.show_thread(state, -1)
   end, "Previous review thread")
+  keymap.map(buffer, "n", "show_thread", function()
+    if not M.open_thread_window(state) then
+      hover_fallback(buffer)
+    end
+  end, "Show the full review thread on this line")
   for _, extra in ipairs(scene.file_actions) do
     keymap.map(buffer, "n", extra[1], extra[2], extra[3])
   end
@@ -327,6 +497,7 @@ function M.detach(state)
   if not scene or scene.detached then
     return
   end
+  M.close_thread_window(state)
   for buffer in pairs(vim.tbl_extend("force", {}, scene.handles, scene.mapped)) do
     release_buffer(state, buffer)
   end
@@ -516,18 +687,24 @@ end
 
 -- Selects the next/previous thread, opening its file, and moves the cursor
 -- to the thread's (possibly moved) position.
+-- An open thread window follows to the new thread.
 function M.show_thread(state, delta)
   M.next_thread(state, delta)
   local thread = state.threads[state.thread_cursor]
   if not thread or not alive(state) or state.status ~= "ready" then
     return
   end
+  local following = state.thread_window ~= nil
   local function jump(buffer)
     local mark = state.thread_marks and state.thread_marks[thread]
     if mark then
       local position = vim.api.nvim_buf_get_extmark_by_id(buffer, M.thread_namespace, mark, {})
       if position[1] then
         pcall(vim.api.nvim_win_set_cursor, state.scene.window, { position[1] + 1, 0 })
+        if following then
+          M.close_thread_window(state)
+          M.open_thread_window(state)
+        end
       end
     end
   end
@@ -543,6 +720,7 @@ end
 
 -- Replaces the review threads; re-places marks on the shown file.
 function M.set_threads(state, threads)
+  M.close_thread_window(state)
   state.threads = vim.deepcopy(threads or {})
   state.thread_cursor = math.min(math.max(1, state.thread_cursor), math.max(1, #state.threads))
   if state.status == "ready" and alive(state) then

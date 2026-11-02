@@ -48,9 +48,24 @@ return function(test)
   resolved.resolved = true
   test.eq("   ◇ resolved", feature.thread_preview(resolved), "resolved threads preview as resolved")
 
-  local thread_view = feature.render_thread(state)
-  test.highlighted(thread_view, "Thread", "ProudWarning", "open threads use warning color")
+  -- The thread window's text: every comment in full, wrapped.
+  local long = vim.deepcopy(state.threads[1])
+  long.comments[2].body = "First paragraph that is long enough to wrap across more than one line of the window.\n\nSecond paragraph."
+  local thread_view = feature.thread_view({ long }, 40)
+  local thread_text = table.concat(thread_view.lines, "\n")
+  test.highlighted(thread_view, "◆", "ProudWarning", "open threads use warning color")
+  test.highlighted(thread_view, "unresolved", "ProudDangerText", "the thread's state is shown")
+  test.contains(thread_text, "2 comments", "comments are counted")
   test.highlighted(thread_view, "dev-lee", "ProudAccentText", "comment authors are accented")
+  test.contains(thread_text, "attempt is already", "the first comment is shown")
+  test.contains(thread_text, "Intended?", "the first comment is shown in full")
+  test.contains(thread_text, "↳ sara-k", "replies are marked")
+  test.contains(thread_text, "Second paragraph.", "every paragraph of a reply is shown")
+  for row = 2, #thread_view.lines do
+    test.truthy(vim.fn.strdisplaywidth(thread_view.lines[row]) <= 40, "comments are wrapped to the window: " .. thread_view.lines[row])
+  end
+  local two = feature.thread_view({ state.threads[1], resolved }, 60)
+  test.highlighted(two, "resolved", "ProudSuccessText", "resolved threads are shown as resolved")
   test.truthy(feature.add_reply(state, "Please add a cap."))
   test.eq(3, #state.threads[1].comments)
   feature.next_thread(state, 1)
