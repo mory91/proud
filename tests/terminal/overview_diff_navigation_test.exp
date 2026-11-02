@@ -25,7 +25,7 @@ spawn -noecho /bin/zsh -lc "cd '$env(PROUD_ROOT)' && ./scripts/run_proud_test_nv
 stty rows 40 columns 160
 wait_for {#482 overview} "overview workspace"
 send "\r"
-wait_for {#482 diff.*single} "diff workspace from overview"
+wait_for {#482 compare} "diff page from overview"
 sleep 1
 send ":qa!\r"
 expect eof

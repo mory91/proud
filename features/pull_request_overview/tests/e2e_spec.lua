@@ -3,16 +3,40 @@ return function(test)
   local fixtures = require("proud.fixtures")
   local state = feature.create(fixtures.overview)
   local opened_diff = false
+  local opened_commit
   local buffer = feature.open(state, {
     current_path = "packages/runner/src/task/retry.ts",
     on_diff = function()
       opened_diff = true
+    end,
+    on_commit = function(sha)
+      opened_commit = sha
     end,
   })
   vim.api.nvim_feedkeys("v", "x", false)
   test.eq(2, feature.viewed_count(state), "v marks selected file viewed")
   vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
   test.truthy(opened_diff, "<CR> opens the full-file diff from overview")
+  local tree = require("proud.components.tree")
+  tree.select(state.sidebar, "commit:a3f91c2")
+  require("proud.loader").load("sidebar").sync_cursor(state.sidebar, state.workspace.panes.sidebar.window)
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
+  test.eq("a3f91c2", opened_commit, "<CR> on a commit opens the diff on that commit")
+  tree.select(state.sidebar, "file:packages/runner/src/task/retry.ts")
+  local overview_tab = state.workspace.tabpage
+  local function splits()
+    return #vim.tbl_filter(function(window)
+      return vim.api.nvim_win_get_config(window).relative == ""
+    end, vim.api.nvim_tabpage_list_wins(overview_tab))
+  end
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<leader>e", true, false, true), "x", false)
+  test.eq(1, splits(), "<leader>e hides the overview sidebar")
+  test.eq(state.workspace.panes.details.window, vim.api.nvim_get_current_win(), "focus moves to the details pane")
+  test.truthy(not state.workspace.lifecycle.closed(), "hiding the sidebar keeps the overview open")
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<leader>e", true, false, true), "x", false)
+  test.eq(2, splits(), "<leader>e shows it again")
+  test.contains(table.concat(vim.api.nvim_buf_get_lines(state.workspace.panes.sidebar.buffer, 0, -1, false), "\n"), "Files 5", "the sidebar keeps its content")
+  vim.api.nvim_set_current_win(state.workspace.panes.sidebar.window)
   test.truthy(vim.api.nvim_buf_is_valid(buffer))
   test.eq({ "sidebar", "details" }, state.workspace.order, "overview uses sidebar and details panes")
   test.truthy(state.workspace.panes.sidebar.buffer ~= state.workspace.panes.details.buffer)
@@ -148,6 +172,8 @@ return function(test)
     credential = false,
     client = fake_client,
     cwd = vim.fn.getcwd(),
+    -- Never check out branches in the repository running the tests.
+    background_checkout = false,
   })
   session.open_pull_requests({ query = "is:open" })
   test.truthy(vim.wait(2000, function()
@@ -188,6 +214,8 @@ return function(test)
     credential = false,
     client = fake_client,
     cwd = vim.fn.getcwd(),
+    -- Never check out branches in the repository running the tests.
+    background_checkout = false,
   })
   session.open_overview(903)
   test.truthy(vim.wait(2000, function()
@@ -245,6 +273,8 @@ return function(test)
     credential = false,
     client = fake_client,
     cwd = vim.fn.getcwd(),
+    -- Never check out branches in the repository running the tests.
+    background_checkout = false,
   })
   session.open_overview(906)
   test.truthy(vim.wait(2000, function()

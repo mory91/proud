@@ -105,6 +105,14 @@ function M.create_scene_lifecycle(options)
         end
       end
     end,
+    -- Stops treating `window` as part of the scene, so closing it (e.g.
+    -- hiding a pane) does not close the scene.
+    untrack_window = function(window)
+      windows[window] = nil
+      if type(window) == "number" and vim.api.nvim_win_is_valid(window) then
+        vim.w[window].proud_scene_id = nil
+      end
+    end,
     track_window = function(window)
       if type(window) == "number" then
         windows[window] = scene_id

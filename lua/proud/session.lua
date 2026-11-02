@@ -6,20 +6,21 @@ local M = {
   credentials_ready = false,
 }
 
-local function read_file_source(path, ref)
-  local cwd = M.options and M.options.cwd or vim.fn.getcwd()
-  local refs = {}
-  if ref and ref ~= "" then
-    table.insert(refs, ref)
+local function repository()
+  return M.options and M.options.cwd or vim.fn.getcwd()
+end
+
+-- Starts checking out the pull request in the background so the diff
+-- opens without waiting on fetches. Failures stay silent here; the diff
+-- retries and shows git's error.
+-- Disabled with `background_checkout = false`.
+local function prepare_checkout(pull)
+  if M.options and M.options.background_checkout == false then
+    return
   end
-  table.insert(refs, "HEAD")
-  for _, source_ref in ipairs(refs) do
-    local completed = vim.system({ "git", "-C", cwd, "show", source_ref .. ":" .. path }, { text = true }):wait()
-    if completed.code == 0 and completed.stdout and completed.stdout ~= "" then
-      return vim.split((completed.stdout:gsub("\n$", "")), "\n", { plain = true })
-    end
+  if pull and pull.number and (pull.head_ref or "") ~= "" then
+    require("proud.git").prepare_pull(repository(), pull)
   end
-  return nil
 end
 
 local function fail(message)
@@ -116,8 +117,11 @@ function M.open_overview(number)
     local feature = loader.load("pull_request_overview")
     local state = feature.create({ number = number, title = "Pull request #" .. tostring(number) }, { loading = true })
     local buffer = feature.open(state, {
-      on_diff = function()
-        M.open_diff(number, "single")
+      on_diff = function(path)
+        M.open_diff(number, path)
+      end,
+      on_commit = function(sha)
+        M.open_diff(number, nil, sha)
       end,
       on_review = function()
         M.open_review(state.pull)
@@ -137,119 +141,63 @@ function M.open_overview(number)
         return
       end
       feature.hydrate(state, pull)
+      prepare_checkout(state.pull)
     end)
   end)
 end
 
-function M.open_diff(number)
+-- Opens a pull request's diff: the compare page for base...head with the
+-- PR's threads. The branch is checked out in place (joining the overview's
+-- background checkout); `path` opens that file first and `commit` selects
+-- one commit's change. Git errors are shown in the diff pane as git
+-- reports them.
+function M.open_diff(number, path, commit)
   with_credentials(function()
-    local name = "single_diff_threads"
+    local name = "branch_compare"
     local feature = loader.load(name)
-    local state = feature.create({ number = number, title = "Pull request #" .. tostring(number) }, {}, nil, {})
-    state.loading = true
+    -- The overview already has the branch names: start loading at once
+    -- instead of requesting them again.
+    local known = M.current
+      and M.current.feature == "pull_request_overview"
+      and M.current.state.pull
+    known = known and known.number == number and (known.head_ref or "") ~= "" and known or nil
+    local state = feature.create({
+      pull = known or { number = number, title = "Pull request #" .. tostring(number) },
+      cwd = repository(),
+    })
     local buffer = feature.open(state, {
-      load_source = function(path)
-        return read_file_source(path, state.pull.head_sha)
-      end,
+      path = path,
+      commit = commit,
+      load = known ~= nil,
     })
     M.current = { feature = name, state = state, buffer = buffer }
     M.provider:list_threads(number, function(thread_ok, threads)
-      if not is_current(state) then
-        return
+      if M.current and M.current.state == state then
+        feature.set_threads(state, thread_ok and threads or {})
       end
-      feature.hydrate(state, { threads = thread_ok and threads or {} })
     end)
     M.provider:get_pull_request(number, function(ok, pull)
-      if not is_current(state) then
+      if not (M.current and M.current.state == state) or known then
         return
       end
       if not ok then
         state.loading = false
-        if state.refresh then
-          state.refresh()
-        end
-        fail(pull.message)
+        loader.load("diff_view").fail(state.diff, pull.message)
         return
       end
-      local source_ref = pull.head_sha
-        or pull.headRefOid
-        or (pull.commits and pull.commits[#pull.commits] and pull.commits[#pull.commits].sha)
-        or pull.head_ref
-      local sources = {}
-      local first_path = pull.files and pull.files[1] and pull.files[1].path
-      if first_path then
-        sources[first_path] = read_file_source(first_path, source_ref)
-      end
-      feature.hydrate(state, { pull = pull, sources = sources })
-      M.provider:get_patch(number, function(patch_ok, patch)
-        if not is_current(state) then
-          return
-        end
-        if not patch_ok then
-          state.loading = false
-          if state.refresh then
-            state.refresh()
-          end
-          fail(patch.message)
-          return
-        end
-        feature.hydrate(state, { patch = patch })
-      end, pull)
+      feature.set_pull(state, pull)
+      feature.load(state, { path = path, commit = commit })
     end)
   end)
 end
 
+-- Compares two local branches: checks out `head` in place and shows its
+-- changes against `base`.
 function M.open_compare(base, head)
-  local git = provider_module.git({ cwd = M.options and M.options.cwd or nil })
   local feature = loader.load("branch_compare")
-  local state = feature.create({
-    base = base,
-    head = head,
-    ahead = 0,
-    behind = 0,
-    commits = {},
-    files = {},
-    loading = true,
-  })
+  local state = feature.create({ base = base, head = head, cwd = repository() })
   local buffer = feature.open(state)
   M.current = { feature = "branch_compare", state = state, buffer = buffer }
-  git:compare(base, head, function(ok, output)
-    if not is_current(state) then
-      return
-    end
-    if not ok then
-      state.loading = false
-      if state.refresh then
-        state.refresh()
-      end
-      fail(output.message)
-      return
-    end
-    local counts = vim.split(output[1] or "", "\t", { trimempty = true })
-    local commits = {}
-    for line in (output[2] or ""):gmatch("[^\n]+") do
-      local sha, message = line:match("^(%x+)%s+(.+)$")
-      table.insert(commits, { sha = sha or "", message = message or line })
-    end
-    local files = {}
-    for line in (output[3] or ""):gmatch("[^\n]+") do
-      local additions, deletions, path = line:match("^(%d+)%s+(%d+)%s+(.+)$")
-      table.insert(files, {
-        additions = tonumber(additions) or 0,
-        deletions = tonumber(deletions) or 0,
-        path = path or "",
-        status = additions == "-" and "B" or "M",
-      })
-    end
-    feature.hydrate(state, {
-      base = base,
-      head = head,
-      behind = tonumber(counts[1]) or 0,
-      ahead = tonumber(counts[2]) or 0,
-      commits = commits,
-      files = files,
-    })
-  end)
 end
 
 function M.open_help()
@@ -273,11 +221,40 @@ function M.open_review(pull, options)
   return buffer, state
 end
 
-function M.demo(screen)
+-- The editable diff needs a real repository: build one from the fixtures
+-- (base branch, PR branch, local origin) once, and remove it on exit.
+local function demo_repository()
+  local fixture_repo = require("proud.fixture_repo")
+  if not (M.demo_repo and vim.uv.fs_stat(M.demo_repo.work)) then
+    local repo = fixture_repo.create()
+    M.demo_repo = repo
+    vim.api.nvim_create_autocmd("VimLeavePre", {
+      once = true,
+      callback = function()
+        fixture_repo.remove(repo)
+      end,
+    })
+  end
+  return M.demo_repo
+end
+
+-- Demo counterpart of prepare_checkout: after the overview has drawn,
+-- build the fixture repository and start checking out its pull request.
+local function demo_prepare_checkout()
+  vim.schedule(function()
+    local repo = demo_repository()
+    require("proud.git").prepare_pull(repo.work, require("proud.fixtures").overview)
+  end)
+end
+
+-- options (diff and compare): path, commit.
+function M.demo(screen, options)
+  options = options or {}
   local fixtures = require("proud.fixtures")
   screen = screen or "browser"
-  if screen == "split" then
-    screen = "single"
+  -- Older names for the pull request diff, now the compare page.
+  if screen == "split" or screen == "single" then
+    screen = "diff"
   end
   if screen == "browser" then
     local feature = loader.load("pull_request_browser")
@@ -298,8 +275,11 @@ function M.demo(screen)
           overview.labels = pull.labels
           local overview_state = overview_feature.create(overview)
           local overview_buffer = overview_feature.open(overview_state, {
-            on_diff = function()
-              M.demo("single")
+            on_diff = function(path)
+              M.demo("diff", { path = path })
+            end,
+            on_commit = function(sha)
+              M.demo("diff", { commit = sha })
             end,
             on_review = function()
               M.demo("review")
@@ -310,6 +290,7 @@ function M.demo(screen)
             state = overview_state,
             buffer = overview_buffer,
           }
+          demo_prepare_checkout()
         end
       end,
     })
@@ -320,28 +301,40 @@ function M.demo(screen)
     local feature = loader.load("pull_request_overview")
     local state = feature.create(fixtures.overview)
     local buffer = feature.open(state, {
-      on_diff = function()
-        M.demo("single")
+      on_diff = function(path)
+        M.demo("diff", { path = path })
+      end,
+      on_commit = function(sha)
+        M.demo("diff", { commit = sha })
       end,
       on_review = function()
         M.demo("review")
       end,
     })
     M.current = { feature = "pull_request_overview", state = state, buffer = buffer }
+    demo_prepare_checkout()
     return
   end
-  if screen == "single" then
-    local feature = loader.load("single_diff_threads")
-    local state = feature.create(fixtures.overview, fixtures.threads, fixtures.patch, fixtures.file_sources)
-    local buffer = feature.open(state)
-    M.current = { feature = "single_diff_threads", state = state, buffer = buffer }
+  if screen == "diff" then
+    -- The pull request's diff: the compare page on the fixture repository,
+    -- with the fixture threads.
+    local repo = demo_repository()
+    local feature = loader.load("branch_compare")
+    local state = feature.create({ pull = fixtures.overview, threads = fixtures.threads, cwd = repo.work })
+    local buffer = feature.open(state, options)
+    M.current = { feature = "branch_compare", state = state, buffer = buffer, repo = repo }
     return
   end
   if screen == "compare" then
+    local repo = demo_repository()
     local feature = loader.load("branch_compare")
-    local state = feature.create(fixtures.compare)
-    local buffer = feature.open(state)
-    M.current = { feature = "branch_compare", state = state, buffer = buffer }
+    local state = feature.create({
+      base = fixtures.overview.base_ref,
+      head = fixtures.overview.head_ref,
+      cwd = repo.work,
+    })
+    local buffer = feature.open(state, options)
+    M.current = { feature = "branch_compare", state = state, buffer = buffer, repo = repo }
     return
   end
   if screen == "help" then

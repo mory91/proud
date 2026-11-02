@@ -207,7 +207,7 @@ M.threads = {
   {
     id = 2,
     path = "packages/runner/src/config.ts",
-    line = 9,
+    line = 6,
     resolved = false,
     comments = {
       {

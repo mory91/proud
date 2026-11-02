@@ -4,6 +4,7 @@
 local config = require("proud.ui.config")
 local cursor = require("proud.ui.cursor")
 local float = require("proud.ui.float")
+local inline_diff = require("proud.ui.inline_diff")
 local geometry = require("proud.ui.geometry")
 local header = require("proud.ui.header")
 local lifecycle = require("proud.ui.lifecycle")
@@ -22,6 +23,7 @@ local M = {
   themes = themes,
   geometry = geometry,
   float = float,
+  inline_diff = inline_diff,
   cursor = cursor,
   text = text,
   view = view,
@@ -62,6 +64,7 @@ M.button_layout = selector.button_layout
 M.open_pair = surface.open_pair
 M.open_float = modal.open_float
 M.set_cursor = window.set_cursor
+M.winbar = window.winbar
 M.set_status_segments = window.set_status_segments
 M.buffer = window.buffer
 M.window_options = window.options
@@ -75,6 +78,10 @@ M.render_workspace = workspace.render_workspace
 M.workspace_buffer = workspace.workspace_buffer
 M.workspace_window = workspace.workspace_window
 M.focus_workspace_pane = workspace.focus_workspace_pane
+M.pane_visible = workspace.pane_visible
+M.hide_pane = workspace.hide_pane
+M.show_pane = workspace.show_pane
+M.toggle_pane = workspace.toggle_pane
 M.close_workspace = workspace.close_workspace
 
 return M

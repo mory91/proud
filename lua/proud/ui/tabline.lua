@@ -10,13 +10,17 @@ local previous
 function M.render()
   local current = vim.fn.tabpagenr()
   local labels = {}
+  local tabpages = vim.api.nvim_list_tabpages()
   for index = 1, vim.fn.tabpagenr("$") do
     local window = vim.fn.tabpagewinnr(index)
     local buffers = vim.fn.tabpagebuflist(index)
     local buffer = buffers[window] or buffers[1]
     local valid = type(buffer) == "number" and buffer >= 0 and vim.api.nvim_buf_is_valid(buffer)
     local name = valid and vim.api.nvim_buf_get_name(buffer) or ""
-    local label = valid and vim.b[buffer].proud_title
+    -- A scene showing real files names its tab with vim.t.proud_title.
+    local tab_title = tabpages[index] and vim.t[tabpages[index]].proud_title
+    local label = tab_title
+      or (valid and vim.b[buffer].proud_title)
       or (name == "" and "proud" or vim.fn.fnamemodify(name, ":t"))
     if index == current then
       labels[#labels + 1] = ("%%#ProudAccent#▌%%#ProudTabActive# %s "):format(label)

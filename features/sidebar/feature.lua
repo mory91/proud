@@ -310,22 +310,32 @@ function M.move_selection(state, delta, options)
   return true
 end
 
+-- options: window (or get_window() when the window can be re-created,
+-- e.g. a hideable pane), refresh, on_open(file payload), on_activate(node)
+-- for other leaves (commits), on_change, on_toggle_viewed.
 function M.attach(buffer, state, options)
   options = options or {}
+  local function window()
+    if options.get_window then
+      return options.get_window()
+    end
+    return options.window
+  end
   local function refresh()
     if options.refresh then
       options.refresh()
     else
-      local width = vim.api.nvim_win_is_valid(options.window or 0)
-        and vim.api.nvim_win_get_width(options.window)
+      local current = window()
+      local width = current and vim.api.nvim_win_is_valid(current)
+        and vim.api.nvim_win_get_width(current)
         or options.width
       ui.render(buffer, M.render(state, width))
     end
-    M.sync_cursor(state, options.window)
+    M.sync_cursor(state, window())
   end
   state.refresh = refresh
   local function move(delta)
-    return M.move_selection(state, delta, options)
+    return M.move_selection(state, delta, { on_change = options.on_change, window = window() })
   end
   state.move = move
   local function open_file()
@@ -340,11 +350,12 @@ function M.attach(buffer, state, options)
       if not vim.api.nvim_buf_is_valid(buffer) then
         return true
       end
-      local window = vim.api.nvim_get_current_win()
-      if options.window and window ~= options.window then
+      local current = vim.api.nvim_get_current_win()
+      local own = window()
+      if own and current ~= own then
         return
       end
-      tree_component.select_row(state, vim.api.nvim_win_get_cursor(window)[1])
+      tree_component.select_row(state, vim.api.nvim_win_get_cursor(current)[1])
     end,
   })
   keymap.map(buffer, "n", "next_node", function()
@@ -380,6 +391,8 @@ function M.attach(buffer, state, options)
         options.on_change()
       end
       refresh()
+    elseif node and node.kind ~= "file" and options.on_activate then
+      options.on_activate(node)
     else
       open_file()
     end

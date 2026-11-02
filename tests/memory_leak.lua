@@ -68,22 +68,40 @@ local scenarios = {
       close_with_key("q")
     end,
   },
-  single = {
+  -- The compare page checks out the branch and opens real files; it is
+  -- measured once loaded, then closed with q from its focused sidebar.
+  diff = {
     open = function()
-      session.demo("single")
+      session.demo("diff")
+      local state = session.current.state
+      vim.wait(15000, function()
+        return state.diff.status ~= "loading"
+          and (state.diff.status ~= "ready" or next(state.diff.scene.handles) ~= nil)
+      end, 10)
       return session.current
     end,
-    close = function()
+    close = function(handle)
       close_with_key("q")
+      vim.wait(1000, function()
+        return handle.state.workspace.lifecycle.closed()
+      end, 10)
     end,
   },
   compare = {
     open = function()
       session.demo("compare")
+      local state = session.current.state
+      vim.wait(15000, function()
+        return state.diff.status ~= "loading"
+          and (state.diff.status ~= "ready" or next(state.diff.scene.handles) ~= nil)
+      end, 10)
       return session.current
     end,
-    close = function()
+    close = function(handle)
       close_with_key("q")
+      vim.wait(1000, function()
+        return handle.state.workspace.lifecycle.closed()
+      end, 10)
     end,
   },
   help = {

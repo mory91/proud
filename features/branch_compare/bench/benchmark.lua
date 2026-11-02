@@ -3,7 +3,8 @@ local feature = require("proud.loader").load("branch_compare")
 local commits = {}
 for index = 1, 100 do
   table.insert(commits, {
-    sha = ("%07x"):format(index * 7919),
+    sha = ("%040x"):format(index * 7919),
+    short = ("%07x"):format(index * 7919),
     message = "Commit " .. index .. " improves deterministic compare rendering",
   })
 end
@@ -17,27 +18,52 @@ for index = 1, 500 do
     notes = index % 10,
   })
 end
-local state = feature.create({
-  base = "main",
-  head = "feat/compare",
-  ahead = 120,
-  behind = 30,
-  commits = commits,
-  files = files,
-  notes = 12,
-})
+-- The compare sidebar after git data arrives: Compare info, 100 commits
+-- and 500 files, built as tree nodes and rendered (what every refresh does).
+local tree = require("proud.components.tree")
+local sidebar = require("proud.loader").load("sidebar")
+local state = feature.create({ base = "main", head = "feat/compare" })
+state.ahead, state.behind = 120, 30
+state.base_short, state.head_short = "4c0e1aa", "9a7d3f0"
+state.commits, state.files = commits, files
+state.loading = false
+
+state.sidebar = tree.create(feature.sidebar_nodes(state))
 
 return {
-  options = {
-    name = "branch_compare.render_100_commits_500_files",
-    iterations = 25,
-    warmup = 5,
+  workloads = {
+    -- What a refresh draws (resize, selection sync): the sidebar tree for
+    -- 100 commits and 500 files, rendered. Same workload and SLA as the
+    -- compare page's original render benchmark.
+    {
+      options = {
+        name = "branch_compare.render_100_commits_500_files",
+        iterations = 25,
+        warmup = 5,
+      },
+      sla = {
+        p95_ms = 3,
+        max_memory_kb = 512,
+      },
+      run = function()
+        return sidebar.render(state.sidebar, 44).lines
+      end,
+    },
+    -- When data changes (loading, picking a commit): the tree is rebuilt
+    -- from git data, then rendered.
+    {
+      options = {
+        name = "branch_compare.rebuild_100_commits_500_files",
+        iterations = 25,
+        warmup = 5,
+      },
+      sla = {
+        p95_ms = 4,
+        max_memory_kb = 3072,
+      },
+      run = function()
+        return sidebar.render(tree.create(feature.sidebar_nodes(state)), 44).lines
+      end,
+    },
   },
-  sla = {
-    p95_ms = 3,
-    max_memory_kb = 512,
-  },
-  run = function()
-    return feature.render(state).lines
-  end,
 }

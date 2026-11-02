@@ -22,7 +22,7 @@ return function(test)
   test.contains(vim.api.nvim_buf_get_name(buffer), "proud://prs")
   vim.cmd("silent! tabclose!")
   vim.cmd("Proud demo split")
-  test.eq("single_diff_threads", require("proud.session").current.feature, "legacy split demo opens the only full-file diff")
+  test.eq("branch_compare", require("proud.session").current.feature, "legacy split demo opens the pull request's diff page")
   vim.cmd("silent! tabclose!")
 
   local provider = require("proud.provider")

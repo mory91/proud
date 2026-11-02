@@ -45,36 +45,34 @@ local expectations = {
     { pane = "details", needle = "dev-lee", group = "ProudAccentText" },
     { pane = "details", needle = "change requested", group = "ProudWarning" },
   },
-  single = {
-    { pane = "code", needle = "main →", group = "ProudAccentText" },
-    { pane = "code", needle = "retry.ts", group = "ProudBright" },
-    { pane = "code", needle = "+6", group = "ProudSuccessText" },
-    { pane = "code", needle = "-2", group = "ProudDangerText" },
-    { pane = "code", needle = "const delay", group = "ProudAdd" },
-    { pane = "code", needle = "await sleep(1000)", group = "ProudDelete" },
-    { pane = "code", needle = "◆", group = "ProudWarning" },
-    { pane = "files", needle = "Files", group = "ProudAccentText" },
-    { pane = "files", needle = "M retry.ts", group = "ProudAccentText" },
-    { pane = "files", needle = "▌", group = "ProudAccent" },
-    { pane = "thread", needle = "Thread", group = "ProudWarning" },
-    { pane = "thread", needle = "dev-lee", group = "ProudAccentText" },
-    { pane = "thread", needle = "Reply as you", group = "ProudMuted" },
+  -- The pull request's diff: the compare page with the PR's threads.
+  diff = {
+    { pane = "winbar", needle = "main", group = "ProudAccentText" },
+    { pane = "winbar", needle = "feat/task-retry-backoff", group = "ProudSuccessText" },
+    { pane = "winbar", needle = "packages/runner/src/config.ts", group = "ProudMuted" },
+    { pane = "winbar", needle = "[+", group = "ProudAccentText" },
+    { pane = "line", needle = "maxDelayMs: number", group = "ProudAddLine" },
+    { pane = "sign", needle = "◆", group = "ProudWarning" },
+    { pane = "sidebar", needle = "Compare", group = "ProudBright" },
+    { pane = "sidebar", needle = "three-dot, from merge base", group = "ProudMuted" },
+    { pane = "sidebar", needle = "#482", group = "ProudMuted" },
+    { pane = "sidebar", needle = "All changes", group = "ProudBright" },
+    { pane = "sidebar", needle = "Add exponential backoff", group = "ProudMuted" },
+    { pane = "sidebar", needle = "+5", group = "ProudSuccessText" },
+    { pane = "sidebar", needle = "◆1", group = "ProudWarning" },
   },
   compare = {
-    { pane = "summary", needle = "Compare", group = "ProudAccentText" },
-    { pane = "summary", needle = "three-dot", group = "ProudAccentText" },
-    { pane = "summary", needle = "main", group = "ProudAccentText" },
-    { pane = "summary", needle = "feat/monitor-diffs", group = "ProudSuccessText" },
-    { pane = "summary", needle = "ahead", group = "ProudSuccessText" },
-    { pane = "summary", needle = "behind", group = "ProudWarning" },
-    { pane = "summary", needle = "local note", group = "ProudMuted" },
-    { pane = "changes", needle = "Commits", group = "ProudAccentText" },
-    { pane = "changes", needle = "9a7d3f0", group = "ProudAccentText" },
-    { pane = "changes", needle = "Files", group = "ProudAccentText" },
-    { pane = "changes", needle = "M monitor/src/diff.ts", group = "ProudAccentText" },
-    { pane = "changes", needle = "+44", group = "ProudSuccessText" },
-    { pane = "changes", needle = "-22", group = "ProudDangerText" },
-    { pane = "changes", needle = "◇1", group = "ProudWarning" },
+    { pane = "sidebar", needle = "Compare", group = "ProudBright" },
+    { pane = "sidebar", needle = "ahead", group = "ProudSuccessText" },
+    { pane = "sidebar", needle = "behind", group = "ProudWarning" },
+    { pane = "sidebar", needle = "no PR yet", group = "ProudMuted" },
+    { pane = "sidebar", needle = "feat/task-retry-backoff", group = "ProudSuccessText" },
+    { pane = "sidebar", needle = "Commits", group = "ProudBright" },
+    { pane = "sidebar", needle = "packages/runner/src/config.ts", group = "ProudBright" },
+    { pane = "sidebar", needle = "+5", group = "ProudSuccessText" },
+    { pane = "sidebar", needle = "−0", group = "ProudDangerText" },
+    { pane = "winbar", needle = "...", group = "ProudMuted" },
+    { pane = "line", needle = "maxDelayMs: number", group = "ProudAddLine" },
   },
   help = {
     { pane = "bindings", needle = "Global", group = "ProudAccentText" },
@@ -100,6 +98,20 @@ local expectations = {
 
 local state = scene == "help" and session.help or session.current and session.current.state
 local workspace = state and (state.workspace or state.surface)
+if state and state.diff and state.diff.scene then
+  -- The compare page: wait for the checkout, then check the sidebar and
+  -- the real file shown in the diff pane ("code").
+  local diff = state.diff
+  vim.wait(15000, function()
+    return diff.status ~= "loading" and (diff.status ~= "ready" or next(diff.scene.handles) ~= nil)
+  end, 20)
+  workspace = {
+    panes = {
+      sidebar = state.workspace.panes.sidebar,
+      code = { buffer = vim.api.nvim_win_get_buf(diff.scene.window), window = diff.scene.window },
+    },
+  }
+end
 local namespace = vim.api.nvim_get_namespaces().proud
 local card_namespace = vim.api.nvim_get_namespaces().proud_conversation_cards
 
@@ -110,7 +122,64 @@ local function covers(mark, row, column)
   return mark[2] == row and start_col <= column and end_col > column
 end
 
+-- True when the code window's 'winbar' shows `needle` inside a segment
+-- drawn with `group` ("%#Group#text").
+local function winbar_has(needle, group)
+  local pane = workspace and workspace.panes and workspace.panes.code
+  if not pane or not vim.api.nvim_win_is_valid(pane.window) then
+    return false
+  end
+  local bar = vim.wo[pane.window].winbar or ""
+  for segment_group, text in bar:gmatch("%%#([%w_]+)#([^%%]*)") do
+    if segment_group == group and text:find(needle, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
+-- Editable diff: a whole-line highlight (inline diff) on the line with
+-- `needle`, or a thread sign `needle` drawn with `group`.
+local function line_has(needle, group)
+  local pane = workspace and workspace.panes and workspace.panes.code
+  local inline = vim.api.nvim_get_namespaces().proud_inline_diff
+  if not pane or not inline then
+    return false
+  end
+  for row, line in ipairs(vim.api.nvim_buf_get_lines(pane.buffer, 0, -1, false)) do
+    if line:find(needle, 1, true) then
+      for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(pane.buffer, inline, { row - 1, 0 }, { row - 1, -1 }, { details = true })) do
+        if mark[4].line_hl_group == group then
+          return true
+        end
+      end
+    end
+  end
+  return false
+end
+
+local function sign_has(needle, group)
+  local pane = workspace and workspace.panes and workspace.panes.code
+  local threads = vim.api.nvim_get_namespaces().proud_diff_threads
+  if not pane or not threads then
+    return false
+  end
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(pane.buffer, threads, 0, -1, { details = true })) do
+    if vim.trim(mark[4].sign_text or "") == needle and mark[4].sign_hl_group == group then
+      return true
+    end
+  end
+  return false
+end
+
 local function has_group(pane_name, needle, group)
+  if pane_name == "winbar" then
+    return winbar_has(needle, group)
+  elseif pane_name == "line" then
+    return line_has(needle, group)
+  elseif pane_name == "sign" then
+    return sign_has(needle, group)
+  end
   local pane = workspace and workspace.panes and workspace.panes[pane_name]
   if not pane then
     return false

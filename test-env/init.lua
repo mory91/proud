@@ -47,7 +47,7 @@ vim.schedule(function()
     require("proud.session").open_overview(number)
   elseif start == "diff" then
     local number = assert(tonumber(vim.env.PROUD_PR_NUMBER), "PROUD_PR_NUMBER must be set")
-    require("proud.session").open_diff(number, vim.env.PROUD_DIFF_MODE or "split")
+    require("proud.session").open_diff(number, vim.env.PROUD_DIFF_PATH)
   elseif start == "compare" then
     local base = assert(vim.env.PROUD_COMPARE_BASE, "PROUD_COMPARE_BASE must be set")
     local head = assert(vim.env.PROUD_COMPARE_HEAD, "PROUD_COMPARE_HEAD must be set")

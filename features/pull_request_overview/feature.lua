@@ -355,7 +355,11 @@ function M.attach(buffer, state, options)
   options = options or {}
   local workspace = options.workspace
   local sidebar_buffer = ui.workspace_buffer(workspace, "sidebar")
-  local sidebar_window = ui.workspace_window(workspace, "sidebar")
+  -- The sidebar can be hidden and shown again (a new window), so look it
+  -- up each time.
+  local function sidebar_window()
+    return ui.workspace_window(workspace, "sidebar")
+  end
   local details_buffer = ui.workspace_buffer(workspace, "details")
   local details_window = ui.workspace_window(workspace, "details")
   local conversation_cards = require("proud.loader").load("conversation_cards")
@@ -372,9 +376,8 @@ function M.attach(buffer, state, options)
   end
 
   local function refresh()
-    local sidebar_width = vim.api.nvim_win_is_valid(sidebar_window)
-      and vim.api.nvim_win_get_width(sidebar_window)
-      or 44
+    local window = sidebar_window()
+    local sidebar_width = window and vim.api.nvim_win_get_width(window) or 44
     local details_width = vim.api.nvim_win_is_valid(details_window)
       and vim.api.nvim_win_get_width(details_window)
       or 80
@@ -384,16 +387,22 @@ function M.attach(buffer, state, options)
     })
     ui.render_workspace(workspace, panes)
     conversation_cards.sync(state.comment_card_windows, panes.details.conversation_cards)
-    sidebar_feature.sync_cursor(state.sidebar, sidebar_window)
+    sidebar_feature.sync_cursor(state.sidebar, sidebar_window())
   end
   state.refresh = refresh
 
   sidebar_feature.attach(sidebar_buffer, state.sidebar, {
-    window = sidebar_window,
+    get_window = sidebar_window,
     refresh = refresh,
     on_open = function(file)
       if options.on_diff then
         options.on_diff(file.path)
+      end
+    end,
+    -- A commit opens the diff page on that commit's change.
+    on_activate = function(node)
+      if node.kind == "commit" and node.payload and options.on_commit then
+        options.on_commit(node.payload.sha)
       end
     end,
     on_toggle_viewed = function(path)
@@ -412,6 +421,11 @@ function M.attach(buffer, state, options)
       options.on_diff(current_path())
     end
   end, "Open full-file diff")
+  keymap.map_workspace(workspace, "n", "toggle_sidebar", function()
+    if ui.toggle_pane(workspace, "sidebar") then
+      refresh()
+    end
+  end, "Show or hide the sidebar")
   local open_review = options.on_review or options.on_comment or function() end
   keymap.map_workspace(workspace, "n", "open_review", open_review, "Compose pull request review")
   keymap.map(details_buffer, "n", "comment", open_review, "Compose pull request review")

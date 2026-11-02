@@ -185,6 +185,9 @@ function M.derive(p)
     ProudWarning = { fg = p.warning },
     ProudAdd = { fg = p.add_fg, bg = p.add_bg },
     ProudDelete = { fg = p.delete_fg, bg = p.delete_bg },
+    -- Diff line backgrounds: no foreground, so code keeps its syntax colors.
+    ProudAddLine = { bg = p.add_bg },
+    ProudDeleteLine = { bg = p.delete_bg },
     ProudSelection = { fg = p.bright, bg = p.selection },
     ProudPreviewBorder = { fg = p.subtle_border, blend = 35 },
     ProudPreviewTitle = { fg = p.muted, blend = 35 },

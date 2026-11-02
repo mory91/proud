@@ -39,7 +39,7 @@ switch -- $env(PROUD_COLOR_SCENE) {
     wait_for {retry is:open} "browser filter value"
   }
   overview { wait_for {#482 overview} "overview color scene" }
-  single { wait_for {#482 diff[^\r\n]*single} "single diff color scene" }
+  diff { wait_for {#482 compare} "pull request diff color scene" }
   compare { wait_for {Compare[^\r\n]*merge base} "compare color scene" }
   help { wait_for {Proud help} "help color scene" }
   review { wait_for {Review} "review color scene" }

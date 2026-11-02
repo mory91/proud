@@ -64,6 +64,20 @@ function M.winhighlight(window, mapping)
   vim.wo[window].winhighlight = M.winhighlight_value(mapping)
 end
 
+-- Sets a window bar from { { text, group }, ... } segments. Text is
+-- escaped for 'winbar' ('%' doubled); one space of padding on the left.
+function M.winbar(window, segments)
+  if not (type(window) == "number" and vim.api.nvim_win_is_valid(window)) then
+    return
+  end
+  local parts = { "%#ProudPanel# " }
+  for _, segment in ipairs(segments or {}) do
+    parts[#parts + 1] = "%#" .. (segment[2] or "ProudPanel") .. "#" .. tostring(segment[1] or ""):gsub("%%", "%%%%")
+  end
+  parts[#parts + 1] = "%#ProudPanel#"
+  vim.wo[window].winbar = table.concat(parts)
+end
+
 -- Maps the three cursor highlight slots to one group.
 function M.cursor_groups(mapping, group)
   mapping.Cursor = group
@@ -93,6 +107,8 @@ function M.decorate(window, buffer, name, options)
     FloatBorder = float_border,
     FloatTitle = float_title,
     CursorLine = "ProudSelection",
+    WinBar = "ProudPanel",
+    WinBarNC = "ProudPanel",
   }
   if options.hide_cursor then
     M.cursor_groups(winhighlight, "ProudCursorHidden")

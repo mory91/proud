@@ -3,6 +3,7 @@ local M = {}
 local definitions = {
   help = { group = "Global", description = "Toggle this help", keys = { "?" } },
   quit = { group = "Global", description = "Close the current scene", keys = { "q" } },
+  toggle_sidebar = { group = "Global", description = "Show or hide the sidebar", keys = { "<leader>e" } },
 
   next_item = { group = "Pull request list", description = "Select the next pull request", keys = { "j" } },
   previous_item = { group = "Pull request list", description = "Select the previous pull request", keys = { "k" } },
@@ -25,13 +26,13 @@ local definitions = {
   comment = { group = "Overview", description = "Draft a pull request comment", keys = { "c" } },
   open_review = { group = "Overview", description = "Compose a pull request review", keys = { "R" } },
 
-  next_file = { group = "Single-file review", description = "Select the next file", keys = { "]f" } },
-  previous_file = { group = "Single-file review", description = "Select the previous file", keys = { "[f" } },
-  select_file = { group = "Single-file review", description = "Select the focused file", keys = { "<CR>" } },
-  next_thread = { group = "Single-file review", description = "Select the next review thread", keys = { "]t" } },
-  previous_thread = { group = "Single-file review", description = "Select the previous review thread", keys = { "[t" } },
-  reply = { group = "Single-file review", description = "Reply to the selected thread", keys = { "r" } },
-  resolve = { group = "Single-file review", description = "Resolve the selected thread", keys = { "R" } },
+  next_file = { group = "Diff", description = "Select the next file", keys = { "]f" } },
+  previous_file = { group = "Diff", description = "Select the previous file", keys = { "[f" } },
+  select_file = { group = "Diff", description = "Select the focused file", keys = { "<CR>" } },
+  next_thread = { group = "Diff", description = "Select the next review thread", keys = { "]t" } },
+  previous_thread = { group = "Diff", description = "Select the previous review thread", keys = { "[t" } },
+  reply = { group = "Diff", description = "Reply to the selected thread", keys = { "r" } },
+  resolve = { group = "Diff", description = "Resolve the selected thread", keys = { "R" } },
 
   swap_branches = { group = "Compare", description = "Swap base and head branches", keys = { "S" } },
   toggle_compare_mode = { group = "Compare", description = "Toggle two-dot and three-dot compare", keys = { "<C-d>" } },
@@ -51,7 +52,7 @@ local groups = {
   "Global",
   "Pull request list",
   "Overview",
-  "Single-file review",
+  "Diff",
   "Compare",
   "Review",
   "Authentication",
@@ -137,6 +138,17 @@ function M.map(buffer, mode, action, callback, description)
       nowait = true,
       desc = description or (definitions[action] and definitions[action].description or action),
     })
+  end
+end
+
+-- Removes an action's buffer-local mappings (used on real file buffers
+-- when a scene stops using them).
+function M.unmap(buffer, mode, action)
+  if not vim.api.nvim_buf_is_valid(buffer) then
+    return
+  end
+  for _, lhs in ipairs(M.keys(action)) do
+    pcall(vim.keymap.del, mode, lhs, { buffer = buffer })
   end
 end
 

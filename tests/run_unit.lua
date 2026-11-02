@@ -8,7 +8,7 @@ local features = {
   "sidebar",
   "pull_request_browser",
   "pull_request_overview",
-  "single_diff_threads",
+  "diff_view",
   "branch_compare",
   "keymap_help",
   "review_submission",
