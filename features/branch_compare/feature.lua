@@ -23,7 +23,9 @@ end
 
 -- input: base, head (branch names), base_rev (git revision for the base,
 -- default base), pull (a pull request: base/head come from it and the
--- branch is checked out from origin), threads, cwd, mode.
+-- branch is checked out from origin), threads, cwd, mode, worktree (a
+-- worktree's path: its branch as it is there, uncommitted edits included,
+-- with nothing checked out).
 function M.create(input)
   input = input or {}
   local state = {
@@ -32,6 +34,8 @@ function M.create(input)
     base_rev = input.base_rev,
     mode = input.mode or "three-dot",
     cwd = input.cwd,
+    -- A worktree's path: compare what is there, without checking out.
+    worktree = input.worktree,
     threads = vim.deepcopy(input.threads or {}),
     ahead = 0,
     behind = 0,
@@ -61,6 +65,14 @@ end
 
 -- Applies pull request metadata: base/head come from the PR, and the base
 -- is compared as origin/<base> (fetched with the checkout).
+-- Reads the branch from the worktree at `path` (its files, its HEAD).
+function M.set_cwd(state, path)
+  state.cwd = path
+  if state.diff then
+    state.diff.cwd = path
+  end
+end
+
 function M.set_pull(state, pull)
   pull = require("proud.provider").normalize_pull_request(pull)
   state.pull = pull
@@ -320,25 +332,37 @@ function M.load(state, options)
   diff_view().set_loading(state.diff, M.loading_message(state), M.range_label(state))
   refresh(state)
 
+  -- callback(ok, error, path): path is the worktree whose files are shown.
   local function checkout(callback)
+    if state.worktree then
+      return callback(true, nil, state.worktree)
+    end
     if state.pull then
-      return git.prepare_pull(cwd, state.pull, function(ok, branch)
+      return git.prepare_pull(cwd, state.pull, function(ok, branch, path)
         if not ok then
           return callback(false, branch)
         end
+        if path and path ~= cwd then
+          return callback(true, nil, path)
+        end
         -- A no-op unless the branch was switched since the preparation.
-        git.run(cwd, { "checkout", branch }, callback)
+        git.checkout_branch(cwd, branch, callback)
       end)
     end
     git.checkout_branch(cwd, state.head, callback)
   end
 
-  checkout(function(ok, value)
+  checkout(function(ok, value, path)
     if stale() then
       return
     end
     if not ok then
       return fail(state, value)
+    end
+    -- The branch may live in another worktree: read everything from there.
+    if path and path ~= cwd then
+      cwd = path
+      M.set_cwd(state, path)
     end
     local function base_point(callback)
       if state.mode == "two-dot" then
@@ -508,7 +532,7 @@ function M.attach(state, options)
     end,
   })
   keymap.map(sidebar_buffer, "n", "toggle_sidebar", toggle, "Show or hide the sidebar")
-  if not state.pull then
+  if not state.pull and not state.worktree then
     -- Ignored while loading: one checkout at a time in the repository.
     keymap.map(sidebar_buffer, "n", "swap_branches", function()
       if state.loading then

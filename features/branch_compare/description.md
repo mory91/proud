@@ -4,6 +4,8 @@ The page for every diff: a sidebar next to the diff pane (`features/diff_view`).
 
 The head is **checked out in place** in the current repository: a local branch, or `origin/<head>` as a local tracking branch; for a pull request, the overview has usually done this already in the background. If git fails (uncommitted changes in the way, a missing branch), the diff pane shows git's own message.
 
+**Worktrees.** git checks a branch out in one worktree at a time. When the head (a pull request's branch included) is already checked out in another worktree, nothing is checked out: the page reads the files, commits and changes from that worktree, so the diff is editable there and language servers see that tree. `:Proud worktree` lists the repository's worktrees (`git worktree list`) to pick one, and `:Proud worktree <branch|path> [base]` opens one directly: its branch, or detached `HEAD`, against the base (the remote's default branch unless given), read from the worktree as it is, uncommitted edits included, with no pull request needed. Swapping is off for a worktree, since its head is whatever is checked out there.
+
 The sidebar, like the design, has three sections:
 
 - **Compare**: the mode (three-dot from the merge base, or two-dot from the base tip), `base @ <commit>`, `head @ <commit>`, `↑ahead ↓behind`, and the PR number or `no PR yet`.
@@ -18,6 +20,6 @@ The sidebar, like the design, has three sections:
 - `features/sidebar/feature.lua` provides the tree, its keys, and activation of commits.
 - `lua/proud/ui/workspace.lua` hides and shows panes (`ui.toggle_pane`).
 - `tests/unit_spec.lua` verifies the sidebar sections, commit selection markers, totals, thread counts, swapping, modes, and pull request metadata.
-- `tests/e2e_spec.lua` drives a real fixture repository: checkout in place, file and commit selection, sidebar sync, the sidebar toggle, swapping, git errors, delayed PR metadata, the overview's background checkout, and opening at a commit.
+- `tests/e2e_spec.lua` drives a real fixture repository: checkout in place, file and commit selection, sidebar sync, the sidebar toggle, swapping, git errors, delayed PR metadata, the overview's background checkout, opening at a commit, a PR whose branch is in another worktree, and a worktree's uncommitted changes without a PR.
 - `bench/benchmark.lua` covers rendering and rebuilding the sidebar for 100 commits and 500 files.
 - `tests/memory_leak_spec.lua` verifies repeated real-screen open/close lifecycle remains within the feature's memory and resource SLA.

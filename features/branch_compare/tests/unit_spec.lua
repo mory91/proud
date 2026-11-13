@@ -92,4 +92,32 @@ return function(test)
   feature.set_pull(pending, { number = 77, base_ref = "develop", head_ref = "fix/x" })
   test.eq("origin/develop", pending.base_rev, "metadata sets the base")
   test.eq("#77 develop...fix/x", pending.diff.title, "the diff pane's title follows")
+
+  local git = require("proud.git")
+  local worktrees = git.parse_worktrees(table.concat({
+    "worktree /repo",
+    "HEAD 1111111111111111111111111111111111111111",
+    "branch refs/heads/main",
+    "",
+    "worktree /repo-wt/feature",
+    "HEAD 2222222222222222222222222222222222222222",
+    "branch refs/heads/feat/nested/name",
+    "",
+    "worktree /repo-wt/detached",
+    "HEAD 3333333333333333333333333333333333333333",
+    "detached",
+    "",
+    "worktree /bare.git",
+    "bare",
+    "",
+  }, "\n"), "/repo-wt/feature")
+  test.eq(4, #worktrees, "every worktree is parsed")
+  test.eq("main", worktrees[1].branch, "branch names lose refs/heads/")
+  test.eq("feat/nested/name", worktrees[2].branch, "slashes in branch names are kept")
+  test.truthy(worktrees[2].current and not worktrees[1].current, "the current worktree is marked")
+  test.eq(nil, worktrees[3].branch, "a detached worktree has no branch")
+  test.truthy(worktrees[3].detached, "and is marked detached")
+  test.eq("3333333333333333333333333333333333333333", worktrees[3].head, "its HEAD is kept")
+  test.truthy(worktrees[4].bare, "a bare entry is marked")
+  test.eq(0, #git.parse_worktrees("", nil), "no output, no worktrees")
 end

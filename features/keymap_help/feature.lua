@@ -46,6 +46,7 @@ function M.render(state)
   command_line(v, ":Proud open {number}", "open description and conversation")
   command_line(v, ":Proud diff {number}", "open full-file inline diff")
   command_line(v, ":Proud compare {base} {head}")
+  command_line(v, ":Proud worktree [{branch|path}]", "a worktree's changes")
   v:blank()
   v:line(
     { "GitHub auth", "ProudAccentText" }, " ",
@@ -69,6 +70,7 @@ function M.render_panes(state, widths)
   command_line(commands, ":Proud open {number}", "description and conversation", "ProudMuted")
   command_line(commands, ":Proud diff {number}", "full-file inline diff", "ProudMuted")
   command_line(commands, ":Proud compare {base} {head}")
+  command_line(commands, ":Proud worktree [{branch|path}]", "a worktree's changes", "ProudMuted")
 
   local runtime = ui.view.new()
   runtime:line({ "Runtime", "ProudAccentText" })

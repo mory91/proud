@@ -49,27 +49,92 @@ local function sequence(steps, callback)
   step(true)
 end
 
+-- Worktrees of the repository at `cwd`, from `git worktree list
+-- --porcelain`: { path, head, branch (short name, or nil when detached),
+-- bare, current (the one `cwd` is in) }.
+function M.parse_worktrees(text, toplevel)
+  local worktrees, current = {}, nil
+  for _, line in ipairs(vim.split(text or "", "\n", { plain = true })) do
+    local key, value = line:match("^(%S+)%s?(.*)$")
+    if key == "worktree" then
+      current = { path = value }
+      current.current = toplevel ~= nil and value == toplevel
+      table.insert(worktrees, current)
+    elseif current and key == "HEAD" then
+      current.head = value
+    elseif current and key == "branch" then
+      current.branch = value:gsub("^refs/heads/", "")
+    elseif current and key == "bare" then
+      current.bare = true
+    elseif current and key == "detached" then
+      current.detached = true
+    end
+  end
+  return worktrees
+end
+
+function M.worktrees(cwd, callback)
+  M.run(cwd, { "rev-parse", "--show-toplevel" }, function(_, toplevel)
+    toplevel = toplevel and vim.trim(toplevel) or nil
+    M.run(cwd, { "worktree", "list", "--porcelain" }, function(ok, value)
+      if not ok then
+        return callback(false, value)
+      end
+      callback(true, M.parse_worktrees(value, toplevel))
+    end)
+  end)
+end
+
+-- The path of the worktree where `branch` is checked out, or nil. git
+-- refuses to check a branch out twice, so a branch that lives in another
+-- worktree is used from there instead.
+function M.worktree_of(cwd, branch, callback)
+  M.worktrees(cwd, function(ok, worktrees)
+    if ok then
+      for _, worktree in ipairs(worktrees) do
+        if worktree.branch == branch and not worktree.bare then
+          return callback(worktree.path, worktree.current)
+        end
+      end
+    end
+    callback(nil)
+  end)
+end
+
+-- Checks out `branch` in `cwd` unless another worktree already has it.
+-- callback(ok, branch | error, path): path is the worktree to read the
+-- files from (`cwd` after a checkout).
+local function checkout_where(cwd, branch, args, callback)
+  M.worktree_of(cwd, branch, function(path)
+    if path then
+      return callback(true, branch, path)
+    end
+    M.run(cwd, args, function(ok, value)
+      callback(ok, ok and branch or value, ok and cwd or nil)
+    end)
+  end)
+end
+
 local function branch_exists(cwd, branch, callback)
   M.run(cwd, { "rev-parse", "--verify", "--quiet", "refs/heads/" .. branch }, function(ok)
     callback(ok)
   end)
 end
 
--- Checks out `branch`, creating it from `start` when it does not exist yet.
+-- Checks out `branch`, creating it from `start` when it does not exist
+-- yet. callback(ok, branch | error, path).
 local function checkout_or_create(cwd, branch, start, callback)
   branch_exists(cwd, branch, function(exists)
-    if exists then
-      M.run(cwd, { "checkout", branch }, callback)
-    else
-      M.run(cwd, { "checkout", "-b", branch, start }, callback)
-    end
+    checkout_where(cwd, branch, exists and { "checkout", branch } or { "checkout", "-b", branch, start }, callback)
   end)
 end
 
 -- Fetches and checks out a pull request's head in place:
 --   1. origin/<head_ref> as the local branch <head_ref> (tracking origin)
 --   2. otherwise (e.g. a fork) pull/<number>/head as the local branch pr-<number>
--- callback(ok, branch | error). Git errors are passed through unchanged.
+-- callback(ok, branch | error, path). When another worktree already has
+-- the branch, nothing is checked out and path is that worktree; otherwise
+-- path is `cwd`. Git errors are passed through unchanged.
 function M.checkout_pull(cwd, pull, callback)
   local head_ref = pull.head_ref
   local function from_pull_ref(previous_error)
@@ -78,9 +143,7 @@ function M.checkout_pull(cwd, pull, callback)
       if not ok then
         return callback(false, previous_error and (previous_error .. "\n\n" .. value) or value)
       end
-      checkout_or_create(cwd, branch, "FETCH_HEAD", function(checked_out, result)
-        callback(checked_out, checked_out and branch or result)
-      end)
+      checkout_or_create(cwd, branch, "FETCH_HEAD", callback)
     end)
   end
   if not head_ref or head_ref == "" then
@@ -92,9 +155,7 @@ function M.checkout_pull(cwd, pull, callback)
     end
     branch_exists(cwd, head_ref, function(exists)
       local args = exists and { "checkout", head_ref } or { "checkout", "-b", head_ref, "--track", "origin/" .. head_ref }
-      M.run(cwd, args, function(checked_out, result)
-        callback(checked_out, checked_out and head_ref or result)
-      end)
+      checkout_where(cwd, head_ref, args, callback)
     end)
   end)
 end
@@ -236,20 +297,25 @@ function M.short(cwd, rev, callback)
 end
 
 -- Checks out a local branch in place; when only origin/<branch> exists,
--- creates the local branch tracking it. callback(ok, branch | error).
+-- creates the local branch tracking it. A branch another worktree has is
+-- used from there. callback(ok, branch | error, path).
 function M.checkout_branch(cwd, branch, callback)
   branch_exists(cwd, branch, function(exists)
     if exists then
-      return M.run(cwd, { "checkout", branch }, function(ok, value)
-        callback(ok, ok and branch or value)
-      end)
+      return checkout_where(cwd, branch, { "checkout", branch }, callback)
     end
     M.run(cwd, { "rev-parse", "--verify", "--quiet", "refs/remotes/origin/" .. branch }, function(remote)
       local args = remote and { "checkout", "-b", branch, "--track", "origin/" .. branch } or { "checkout", branch }
-      M.run(cwd, args, function(ok, value)
-        callback(ok, ok and branch or value)
-      end)
+      checkout_where(cwd, branch, args, callback)
     end)
+  end)
+end
+
+-- The remote's default branch (origin/HEAD), else "main".
+function M.default_branch(cwd, callback)
+  M.run(cwd, { "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD" }, function(ok, value)
+    local branch = ok and vim.trim(value):gsub("^origin/", "") or ""
+    callback(branch ~= "" and branch or "main", ok)
   end)
 end
 
@@ -272,7 +338,7 @@ end
 -- overview can start one and the diff can join it (or take its finished
 -- result) instead of starting over:
 --   prepare_pull(cwd, pull)            starts the job (no-op if one exists)
---   prepare_pull(cwd, pull, callback)  starts or joins; callback(ok, branch | error)
+--   prepare_pull(cwd, pull, callback)  starts or joins; callback(ok, branch | error, path)
 -- A finished success is handed to the first caller with a callback and
 -- then forgotten, so the next overview fetches again. A failure is never
 -- kept: the next caller retries against the repository as it is then.
@@ -289,7 +355,7 @@ function M.prepare_pull(cwd, pull, callback)
     if callback then
       jobs[key] = nil
       vim.schedule(function()
-        callback(true, job.branch)
+        callback(true, job.branch, job.path)
       end)
     end
     return
@@ -302,24 +368,24 @@ function M.prepare_pull(cwd, pull, callback)
   end
   job = { waiting = { callback } }
   jobs[key] = job
-  local function finish(ok, value)
+  local function finish(ok, value, path)
     local waiting = job.waiting
     job.waiting = {}
     if ok and #waiting == 0 then
-      job.done, job.branch = true, value
+      job.done, job.branch, job.path = true, value, path
     elseif jobs[key] == job then
       jobs[key] = nil
     end
     for _, waiter in ipairs(waiting) do
-      waiter(ok, value)
+      waiter(ok, value, path)
     end
   end
-  M.checkout_pull(cwd, pull, function(ok, branch)
+  M.checkout_pull(cwd, pull, function(ok, branch, path)
     if not ok then
       return finish(false, branch)
     end
     M.run(cwd, { "fetch", "origin", pull.base_ref or "main" }, function(fetched, value)
-      finish(fetched, fetched and branch or value)
+      finish(fetched, fetched and branch or value, path)
     end)
   end)
 end

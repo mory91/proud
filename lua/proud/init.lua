@@ -52,6 +52,12 @@ local commands = {
     end
     session.open_compare(base, head)
   end,
+  worktree = function(options)
+    local query, base = options.fargs[1], options.fargs[2]
+    session.choose_worktree(query, function(worktree)
+      session.open_worktree(worktree, base)
+    end)
+  end,
   help = function()
     session.open_help()
   end,
@@ -84,7 +90,7 @@ function M.setup(options)
   vim.api.nvim_create_user_command("Proud", function(command_options)
     local subcommand = vim.split(command_options.args, "%s+", { trimempty = true })[1]
     if not subcommand then
-      vim.notify("Usage: Proud {prs|open|diff|compare|help|demo}", vim.log.levels.INFO)
+      vim.notify("Usage: Proud {prs|open|diff|compare|worktree|help|demo}", vim.log.levels.INFO)
       return
     end
     local handler = commands[subcommand]
