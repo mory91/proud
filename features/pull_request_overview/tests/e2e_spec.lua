@@ -1,5 +1,48 @@
 return function(test)
   local feature = require("proud.loader").load("pull_request_overview")
+  local polling = feature.create({ number = 46, checks = {
+    { id = "ci", name = "CI", status = "pending", target_url = "https://example.com/ci" },
+  } })
+  local calls, reply, opened = 0, nil, nil
+  feature.open(polling, {
+    check_refresh_ms = 10,
+    on_check = function(url) opened = url end,
+    on_refresh_checks = function(done) calls = calls + 1; reply = done end,
+  })
+  local tree = require("proud.components.tree")
+  tree.select(polling.sidebar, "check:ci:1")
+  require("proud.loader").load("sidebar").sync_cursor(polling.sidebar, polling.workspace.panes.sidebar.window)
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, false, true), "x", false)
+  test.eq("https://example.com/ci", opened, "Enter opens check details")
+  test.truthy(vim.wait(1000, function() return calls == 1 end, 5), "pending checks are polled")
+  vim.wait(35, function() return false end, 5)
+  test.eq(1, calls, "poll requests cannot overlap")
+  vim.cmd("tabnew")
+  reply(false, { message = "offline" })
+  vim.wait(35, function() return false end, 5)
+  test.eq(1, calls, "hidden overviews pause polling")
+  vim.cmd("tabclose")
+  test.eq("pending", polling.checks[1].status, "refresh failures retain last checks")
+  test.truthy(vim.wait(1000, function() return calls == 2 end, 5), "failed polls retry")
+  polling.drafts = { new = "keep my draft" }
+  polling.files = { { path = "a", viewed = true } }
+  local details = polling.workspace.panes.details
+  local before = vim.api.nvim_buf_get_lines(details.buffer, 0, -1, false)
+  reply(true, { { id = "ci", name = "CI", conclusion = "SUCCESS" } })
+  test.eq("pass", polling.checks[1].status)
+  test.eq(before, vim.api.nvim_buf_get_lines(details.buffer, 0, -1, false), "check refresh leaves details unchanged")
+  test.eq("keep my draft", polling.drafts.new)
+  test.truthy(polling.files[1].viewed)
+  test.truthy(polling.check_timer:is_closing(), "completed checks stop the timer")
+  require("proud.ui").close_workspace(polling.workspace)
+  local closing = feature.create({ number = 47, checks = { { name = "CI", status = "pending" } } })
+  local late
+  feature.open(closing, { check_refresh_ms = 10, on_refresh_checks = function(done) late = done end })
+  test.truthy(vim.wait(1000, function() return late ~= nil end, 5))
+  require("proud.ui").close_workspace(closing.workspace)
+  test.truthy(closing.check_timer:is_closing(), "closing the overview closes its timer")
+  late(true, { { name = "CI", status = "pass" } })
+  test.eq("pending", closing.checks[1].status, "late responses cannot mutate a closed overview")
   local fixtures = require("proud.fixtures")
   local state = feature.create(fixtures.overview)
   local opened_diff = false

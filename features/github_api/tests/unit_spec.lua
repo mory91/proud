@@ -371,6 +371,23 @@ return function(test)
   test.contains(first_check_body.query, "statusCheckRollup")
   test.eq("check-page-2", second_check_body.variables.after)
 
+  table.insert(replies, { code = 200, stdout = '{"data":{"repository":{"pullRequest":{"statusCheckRollup":null}}}}' })
+  done = false
+  client:get_pull_request_checks(482, function(ok, value)
+    done = true
+    test.truthy(ok, "a PR without checks is a successful empty result")
+    test.eq({}, value)
+  end)
+  test.truthy(vim.wait(1000, function() return done end, 10))
+  table.insert(replies, { code = 200, stdout = '{"total_count":1,"check_runs":[{"id":1,"name":"lint","conclusion":"failure"}]}' })
+  done = false
+  client:list_check_runs("head-sha", function(ok, value)
+    done = true
+    test.truthy(ok)
+    test.eq("failure", value[1].conclusion, "check polling bypasses the previous REST response cache")
+  end)
+  test.truthy(vim.wait(1000, function() return done end, 10))
+
   -- Review threads, replies, resolving and pending reviews.
   local function call(method, ...)
     local args = { ... }

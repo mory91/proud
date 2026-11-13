@@ -501,7 +501,7 @@ function M.new(options)
     return self:request(specification, callback)
   end
 
-  function client:paginate(path, query, callback)
+  function client:paginate(path, query, callback, options)
     local items = {}
     local page = 1
     local function load_page()
@@ -513,7 +513,7 @@ function M.new(options)
         page = page,
         per_page = self.page_size,
       })
-      self:request_json({ method = "GET", path = path, query = page_query }, function(ok, value)
+      self:request_json({ method = "GET", path = path, query = page_query, skip_cache = options and options.skip_cache }, function(ok, value)
         if not ok then
           callback(false, value)
           return
@@ -801,6 +801,10 @@ query ProudPullRequestChecks($owner: String!, $name: String!, $number: Int!, $fi
           and type(value.data) == "table"
           and type(value.data.repository) == "table"
           and value.data.repository.pullRequest
+        if type(pull) == "table" and (pull.statusCheckRollup == vim.NIL or pull.statusCheckRollup == nil) then
+          callback(true, {})
+          return
+        end
         local contexts = type(pull) == "table"
           and type(pull.statusCheckRollup) == "table"
           and pull.statusCheckRollup.contexts
@@ -847,12 +851,13 @@ query ProudPullRequestChecks($owner: String!, $name: String!, $number: Int!, $fi
   end
 
   function client:list_check_runs(ref, callback)
-    self:paginate(repository_path(("/commits/%s/check-runs"):format(M.encode_component(ref))), {}, callback)
+    self:paginate(repository_path(("/commits/%s/check-runs"):format(M.encode_component(ref))), {}, callback, { skip_cache = true })
   end
 
   function client:list_commit_statuses(ref, callback)
     self:request_json({
       method = "GET",
+      skip_cache = true,
       path = repository_path(("/commits/%s/status"):format(M.encode_component(ref))),
     }, function(ok, value)
       callback(ok, ok and (value.statuses or {}) or value)
@@ -871,7 +876,7 @@ query ProudPullRequestChecks($owner: String!, $name: String!, $number: Int!, $fi
   end
 
   function client:get_pull_request(number, callback)
-    self:request_json({ method = "GET", path = repository_path(("/pulls/%d"):format(number)) }, function(ok, pull)
+    self:request_json({ method = "GET", skip_cache = true, path = repository_path(("/pulls/%d"):format(number)) }, function(ok, pull)
       if not ok then
         callback(false, pull)
         return
@@ -919,6 +924,7 @@ query ProudPullRequestChecks($owner: String!, $name: String!, $number: Int!, $fi
             end
             for _, item in ipairs(results.graphql_checks or {}) do
               add_check(item, {
+                id = item.id,
                 name = item.name or item.context or "check",
                 conclusion = item.conclusion,
                 state = item.state or item.status,
@@ -930,6 +936,7 @@ query ProudPullRequestChecks($owner: String!, $name: String!, $number: Int!, $fi
               local prefix = source.key == "head" and "" or source.key .. "_"
               for _, item in ipairs(results[prefix .. "check_runs"] or {}) do
                 add_check(item, {
+                  id = item.id,
                   name = item.name or "check",
                   conclusion = item.conclusion,
                   status = item.status,
@@ -939,6 +946,7 @@ query ProudPullRequestChecks($owner: String!, $name: String!, $number: Int!, $fi
               end
               for _, item in ipairs(results[prefix .. "statuses"] or {}) do
                 add_check(item, {
+                  id = item.id,
                   name = item.context or "status",
                   state = item.state,
                   duration = "",

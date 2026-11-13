@@ -17,3 +17,5 @@ Hosts can hide and show the sidebar (`<leader>e` on the overview and compare pag
 - `tests/e2e_spec.lua` opens the component in a real Neovim workspace and drives expansion, viewed state, and activation.
 - `tests/memory_leak_spec.lua` verifies repeated overview/sidebar screen lifecycles remain bounded.
 - `bench/benchmark.lua` measures rendering and the attached movement handler for 500 expanded nodes under explicit timing and heap SLAs.
+
+Checks distinguish success, failure, pending, skipped, and neutral with semantic icons and colors. Failures sort first, pending checks next; rows show duration or state, and Enter opens the available details URL. The header includes passing, failing, and pending counts.

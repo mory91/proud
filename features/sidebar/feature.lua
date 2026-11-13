@@ -73,20 +73,29 @@ local function files_summary(total, viewed)
 end
 
 local function checks_summary(checks)
-  local passing = 0
+  local passing, failing, pending = 0, 0, 0
   for _, check in ipairs(checks or {}) do
     if check.status == "pass" then
       passing = passing + 1
+    elseif check.status == "fail" then
+      failing = failing + 1
+    elseif check.status == "pending" then
+      pending = pending + 1
     end
   end
-  return ("%d of %d passing"):format(passing, #(checks or {}))
+  local summary = ("%d of %d passing"):format(passing, #(checks or {}))
+  if failing > 0 then summary = summary .. (" · %d failing"):format(failing) end
+  if pending > 0 then summary = summary .. (" · %d pending"):format(pending) end
+  return summary
 end
 
 local function check_sections(check)
-  local symbol = check.status == "pass" and "✓" or check.status == "pending" and "○" or "✗"
+  local symbols = { pass = "✓", fail = "✗", pending = "○", skipped = "↷", neutral = "−" }
+  local symbol = symbols[check.status] or "○"
   local group = check.status == "pass" and "ProudSuccessText"
+    or check.status == "fail" and "ProudDangerText"
     or check.status == "pending" and "ProudWarning"
-    or "ProudDangerText"
+    or "ProudMuted"
   local name = tostring(check.name or "")
   local name_width = 18
   local padding = string.rep(" ", math.max(0, name_width - ui.display_width(name)))
@@ -100,6 +109,7 @@ local function check_sections(check)
     },
   }
   local duration = tostring(check.duration or "")
+  if duration == "" then duration = check.state_label or check.status or "pending" end
   if duration ~= "" then
     table.insert(sections, { text = duration, group = "ProudMuted" })
   end
@@ -211,15 +221,25 @@ function M.overview_nodes(state)
   end
 
   local check_children = {}
-  for _, check in ipairs(state.checks or {}) do
+  local ordered = {}
+  local priority = { fail = 1, pending = 2 }
+  for index, check in ipairs(state.checks or {}) do
+    ordered[#ordered + 1] = { check = check, index = index }
+  end
+  table.sort(ordered, function(a, b)
+    local ap, bp = priority[a.check.status] or 3, priority[b.check.status] or 3
+    return ap < bp or (ap == bp and a.index < b.index)
+  end)
+  for _, entry in ipairs(ordered) do
+    local check = entry.check
     table.insert(check_children, {
-      id = "check:" .. tostring(check.name),
+      id = "check:" .. tostring(check.id or check.name) .. ":" .. entry.index,
       kind = "check",
       label = check.name or "",
       marker = "",
       spacing = { 1, 3 },
       sections = check_sections(check),
-      payload = { status = check.status },
+      payload = { status = check.status, url = check.url },
     })
   end
 

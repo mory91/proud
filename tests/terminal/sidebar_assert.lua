@@ -27,7 +27,7 @@ if sidebar then
       or "Files 5 · 1 of 5 viewed"
   ok = ok and header(files) == expected_files_status
   ok = ok and header(commits) == "Commits 6"
-  ok = ok and header(checks) == "Checks 4 of 5 passing"
+  ok = ok and header(checks) == "Checks 4 of 5 passing · 1 failing"
   ok = ok and text:find("Files", 1, true) ~= nil
   ok = ok and text:find("Commits", 1, true) ~= nil
   ok = ok and text:find("Checks", 1, true) ~= nil

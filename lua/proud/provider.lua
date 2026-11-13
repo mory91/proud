@@ -172,13 +172,18 @@ function M.normalize_checks(value)
       local raw_status = text_value(first_value(item.conclusion, item.state, item.status), "")
       local normalized_status = raw_status:lower()
       local status = "pending"
-      if normalized_status == "success" or normalized_status == "pass" or normalized_status == "neutral" or normalized_status == "skipped" then
+      if normalized_status == "success" or normalized_status == "pass" then
         status = "pass"
-      elseif normalized_status == "failure" or normalized_status == "fail" or normalized_status == "cancelled" or normalized_status == "timed_out" or normalized_status == "action_required" then
+      elseif normalized_status == "neutral" or normalized_status == "skipped" then
+        status = normalized_status
+      elseif normalized_status == "error" or normalized_status == "startup_failure" or normalized_status == "failure" or normalized_status == "fail" or normalized_status == "cancelled" or normalized_status == "timed_out" or normalized_status == "action_required" then
         status = "fail"
       end
       table.insert(checks, {
+        id = text_value(first_value(item.id, item.databaseId), nil),
         name = text_value(first_value(item.name, item.context, item.job_name), "check"),
+        url = text_value(first_value(item.target_url, item.targetUrl, item.details_url, item.detailsUrl, item.url), nil),
+        state_label = text_value(item.state_label, normalized_status):gsub("_", " "),
         status = status,
         duration = text_value(github_sdk.check_duration(item), ""),
       })

@@ -128,6 +128,11 @@ function M.open_overview(number)
       on_review = function()
         M.open_review(state.pull)
       end,
+      on_refresh_checks = function(done)
+        M.provider:get_pull_request(number, function(ok, pull)
+          done(ok and #(pull.check_errors or {}) == 0, ok and pull.checks or pull)
+        end)
+      end,
       on_comment = M.comment_action(number),
       viewer = function()
         return M.viewer_login
