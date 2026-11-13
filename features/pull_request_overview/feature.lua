@@ -312,6 +312,64 @@ function M.hydrate(state, pull, options)
   return state
 end
 
+-- Update only checks: refreshing CI must not replace drafts, viewed marks,
+-- conversation cards, or the details pane's cursor/scroll position.
+function M.update_checks(state, checks)
+  state.checks = require("proud.provider").normalize_checks(checks)
+  state.pull.checks = state.checks
+  local tree = require("proud.components.tree")
+  local layout = tree.layout(state.sidebar)
+  local nodes = sidebar_feature.create(sidebar_feature.overview_nodes(state)).roots
+  for index, root in ipairs(state.sidebar.roots) do
+    if root.id == "checks" then state.sidebar.roots[index] = nodes[3] end
+  end
+  tree.restore_layout(state.sidebar, layout)
+  local workspace = state.workspace
+  if workspace and not workspace.lifecycle.closed() then
+    local window = ui.workspace_window(workspace, "sidebar")
+    local buffer = ui.workspace_buffer(workspace, "sidebar")
+    if window and vim.api.nvim_win_is_valid(window) then
+      local view = vim.api.nvim_win_call(window, vim.fn.winsaveview)
+      ui.render(buffer, sidebar_feature.render(state.sidebar, vim.api.nvim_win_get_width(window)))
+      vim.api.nvim_win_call(window, function() vim.fn.winrestview(view) end)
+      sidebar_feature.sync_cursor(state.sidebar, window)
+    end
+  end
+end
+
+local function pending_checks(state)
+  for _, check in ipairs(state.checks) do
+    if check.status == "pending" then return true end
+  end
+  return false
+end
+
+function M.watch_checks(state, options)
+  if not options.on_refresh_checks then return end
+  local timer = vim.uv.new_timer()
+  state.check_timer = timer
+  local busy = false
+  function state.stop_check_refresh()
+    if not timer:is_closing() then timer:stop(); timer:close() end
+  end
+  timer:start(options.check_refresh_ms or 15000, options.check_refresh_ms or 15000, vim.schedule_wrap(function()
+    local workspace = state.workspace
+    if workspace.lifecycle.closed() then state.stop_check_refresh(); return end
+    if state.loading or busy then return end
+    if not pending_checks(state) then state.stop_check_refresh(); return end
+    if vim.api.nvim_get_current_tabpage() ~= workspace.tabpage then return end
+    busy = true
+    options.on_refresh_checks(function(ok, checks)
+      busy = false
+      if workspace.lifecycle.closed() then return end
+      if ok then
+        M.update_checks(state, checks)
+        if not pending_checks(state) then state.stop_check_refresh() end
+      end
+    end)
+  end))
+end
+
 function M.create(pull, options)
   options = options or {}
   local normalized = require("proud.provider").normalize_pull_request(pull)
@@ -851,6 +909,8 @@ function M.attach(buffer, state, options)
     on_activate = function(node)
       if node.kind == "commit" and node.payload and options.on_commit then
         options.on_commit(node.payload.sha)
+      elseif node.kind == "check" and node.payload and node.payload.url then
+        (options.on_check or vim.ui.open)(node.payload.url)
       end
     end,
     on_toggle_viewed = function(path)
@@ -924,6 +984,9 @@ function M.open(state, options)
     focus = "sidebar",
     title = "#" .. tostring(state.pull.number) .. " overview",
     statusline = "#" .. tostring(state.pull.number) .. " overview",
+    on_close = function()
+      if state.stop_check_refresh then state.stop_check_refresh() end
+    end,
     on_resize = function()
       if state.refresh then
         state.refresh()
@@ -933,6 +996,7 @@ function M.open(state, options)
   state.workspace = workspace
   local buffer = ui.workspace_buffer(workspace, "sidebar")
   M.attach(buffer, state, vim.tbl_extend("force", options, { workspace = workspace }))
+  M.watch_checks(state, options)
   return buffer
 end
 

@@ -15,6 +15,10 @@ local body = {}
 for index = 1, 250 do
   table.insert(body, "Description line " .. index .. " for deterministic performance verification.")
 end
+local checks = {}
+for index = 1, 100 do
+  checks[index] = { name = "CI job " .. index, status = ({ "pass", "fail", "pending", "skipped", "neutral" })[index % 5 + 1] }
+end
 local state = feature.create({
   number = 482,
   title = "Add retry backoff to robot task runner",
@@ -26,15 +30,12 @@ local state = feature.create({
   body = body,
   files = files,
   commits = {},
-  checks = {
-    { name = "unit", status = "pass", duration = "1s" },
-    { name = "e2e", status = "fail", duration = "2s" },
-  },
+  checks = checks,
 })
 
 return {
   options = {
-    name = "pull_request_overview.render_200_files_250_body_lines",
+    name = "pull_request_overview.render_200_files_250_body_lines_100_checks",
     iterations = 30,
     warmup = 5,
   },

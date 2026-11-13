@@ -1,4 +1,26 @@
 return function(test)
+  local provider = require("proud.provider")
+  local sidebar = require("proud.loader").load("sidebar")
+  local samples = {
+    { name = "success", conclusion = "SUCCESS", detailsUrl = "https://example.com/success" },
+    { name = "skipped", conclusion = "SKIPPED" },
+    { name = "neutral", conclusion = "NEUTRAL" },
+    { name = "running", conclusion = vim.NIL, status = "IN_PROGRESS" },
+    { context = "legacy error", state = "ERROR", target_url = "https://example.com/error" },
+    { name = "failed", conclusion = "FAILURE" },
+  }
+  local checks = provider.normalize_checks(samples)
+  test.eq({ "pass", "skipped", "neutral", "pending", "fail", "fail" }, vim.tbl_map(function(c) return c.status end, checks))
+  test.eq(checks, provider.normalize_checks(checks), "normalizing checks twice preserves statuses and URLs")
+  local nodes = sidebar.overview_nodes({ checks = checks })
+  test.eq({ "legacy error", "failed", "running", "success", "skipped", "neutral" }, vim.tbl_map(function(n) return n.label end, nodes[3].children))
+  test.eq("https://example.com/error", nodes[3].children[1].payload.url)
+  local view = sidebar.render(sidebar.create(nodes), 100)
+  test.highlighted(view, "↷", "ProudMuted")
+  test.highlighted(view, "−", "ProudMuted")
+  test.highlighted(view, "○", "ProudWarning")
+  test.contains(table.concat(view.lines, "\n"), "in progress")
+  test.contains(table.concat(view.lines, "\n"), "2 failing · 1 pending")
   local feature = require("proud.loader").load("pull_request_overview")
   local fixtures = require("proud.fixtures")
   local state = feature.create(fixtures.overview)

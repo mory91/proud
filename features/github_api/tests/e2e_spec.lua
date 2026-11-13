@@ -66,6 +66,7 @@ return function(test)
                           __typename = "CheckRun",
                           databaseId = 901,
                           name = "unit",
+                          detailsUrl = "https://example.com/unit",
                           status = "COMPLETED",
                           conclusion = "SUCCESS",
                           startedAt = "2026-10-18T12:00:00Z",
@@ -84,8 +85,11 @@ return function(test)
                           __typename = "StatusContext",
                           id = "status-preview",
                           context = "preview",
+                          targetUrl = "https://example.com/preview",
                           state = "PENDING",
                         },
+                        { __typename = "CheckRun", id = "skip", name = "skip", conclusion = "SKIPPED" },
+                        { __typename = "CheckRun", id = "neutral", name = "neutral", conclusion = "NEUTRAL" },
                       },
                       pageInfo = { hasNextPage = false, endCursor = vim.NIL },
                     },
@@ -111,7 +115,7 @@ return function(test)
   test.eq("Use resilient retries", pull.title)
   test.eq("retry.ts", pull.files[1].filename)
   test.eq("commit-sha", pull.commits[1].sha)
-  test.eq(3, #pull.statusCheckRollup)
+  test.eq(5, #pull.statusCheckRollup)
   test.contains(pull.statusCheckRollup[1].name, "unit")
   test.eq("18s", pull.statusCheckRollup[1].duration)
   test.eq("e2e / robot-studio", pull.statusCheckRollup[2].name)
@@ -153,11 +157,15 @@ return function(test)
   test.contains(table.concat(conversation_text, "\n"), "Fixed in the next push.", "review comment replies remain threaded")
   local check_node = require("proud.components.tree").find(overview.sidebar, "checks")
   test.truthy(check_node ~= nil, "GraphQL-only checks reach the overview sidebar")
-  test.eq(3, #check_node.children, "check-run and status contexts are both listed")
+  test.eq(5, #check_node.children, "check-run and status contexts are both listed")
   local check_header = table.concat(vim.tbl_map(function(section)
     return section.text or ""
   end, check_node.sections), " ")
-  test.contains(check_header, "Checks 1 of 3 passing", "sidebar summarizes GraphQL checks")
+  test.contains(check_header, "Checks 1 of 5 passing", "sidebar summarizes GraphQL checks")
+
+  test.eq({ "fail", "pending", "pass", "skipped", "neutral" }, vim.tbl_map(function(node) return node.payload.status end, check_node.children), "all GitHub states reach sorted sidebar rows")
+  test.eq("https://example.com/preview", check_node.children[2].payload.url, "legacy status URL survives hydration")
+  test.eq("https://example.com/unit", check_node.children[3].payload.url, "check details URL survives hydration")
 
   local graphql_request
   for _, request in ipairs(requests) do

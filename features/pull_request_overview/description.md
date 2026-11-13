@@ -14,3 +14,7 @@ File viewed state is tracked independently so reviewers can resume work without 
 - `tests/e2e_spec.lua` verifies conversation navigation, focus, quote and threaded replies, comments, drafts, failed posts, the session's GitHub calls, the viewed-file keyboard workflow, overview-to-diff navigation, delayed provider hydration, native card rendering, and stale-safe placeholder rendering.
 - `bench/benchmark.lua` covers 200 changed files and 250 description lines.
 - `tests/memory_leak_spec.lua` verifies repeated real-screen open/close lifecycle remains within the feature's memory and resource SLA.
+
+Checks distinguish success, failure, pending, skipped, and neutral with semantic icons and colors. Failures sort first, pending checks next; rows show duration or state, and Enter opens the available details URL. The header includes passing, failing, and pending counts.
+
+Live overviews poll every 15 seconds while checks are pending. Polling pauses in other tabs, avoids overlapping requests, retains the last result on errors, and stops on completion or scene closure. Only the checks subtree is updated, preserving drafts, local viewed marks, and conversation content.
