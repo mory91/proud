@@ -98,6 +98,8 @@ Alternatively, configure a Git credential helper and leave token resolution to s
 :Proud open 482
 :Proud diff 482
 :Proud compare main feat/monitor-diffs
+:Proud worktree            " pick a worktree and see its changes
+:Proud worktree spike/x    " or name it by branch or path
 :Proud help
 :Proud demo
 :Proud demo review

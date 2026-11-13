@@ -268,5 +268,85 @@ return function(test)
   fixture_repo.remove(background)
   credentials.reset()
   test.eq(nil, diff_view.alive(joined.diff) and true or nil, "the closed page's diff pane is detached")
+
+  local function run(cwd, args)
+    local command = { "git", "-C", cwd }
+    vim.list_extend(command, args)
+    local result = vim.system(command, { text = true }):wait()
+    test.eq(0, result.code, "git " .. table.concat(args, " ") .. ": " .. (result.stderr or ""))
+    return vim.trim(result.stdout or "")
+  end
+  local function real(path)
+    return vim.uv.fs_realpath(path) or path
+  end
+
+  -- A PR whose branch is checked out in another worktree: git refuses a
+  -- second checkout, so the diff reads the files from that worktree.
+  local shared = fixture_repo.create()
+  run(shared.work, { "branch", "-q", shared.head_ref, "origin/" .. shared.head_ref })
+  local other = shared.root .. "/other"
+  run(shared.work, { "worktree", "add", "-q", other, shared.head_ref })
+  local found = nil
+  git.worktree_of(shared.work, shared.head_ref, function(path) found = path or false end)
+  test.truthy(vim.wait(5000, function() return found ~= nil end, 10), "worktree lookup answers")
+  test.eq(real(other), real(found), "the branch is found in the other worktree")
+  session.configure({
+    kind = "github",
+    repository = "acme/widget",
+    token = "github_pat_diff_worktree",
+    token_path = vim.fn.tempname(),
+    credential = false,
+    cwd = shared.work,
+    client = {
+      get_repository = function(_, callback) callback(true, { full_name = "acme/widget" }) end,
+      get_pull_request = function(_, _, callback) callback(true, vim.deepcopy(fixtures.overview)) end,
+      list_review_comments = function(_, _, callback) callback(true, {}) end,
+    },
+  })
+  session.current = nil
+  session.open_diff(482)
+  test.truthy(vim.wait(5000, function() return session.current ~= nil end, 10), "the PR diff page opens")
+  local in_worktree = session.current.state
+  test.truthy(vim.wait(15000, function() return ready(in_worktree) end, 20), "the PR diff opens")
+  test.eq("ready", in_worktree.diff.status, "no 'already used by worktree' error: " .. tostring(in_worktree.error))
+  test.eq(real(other), real(in_worktree.cwd), "the diff reads from the worktree that has the branch")
+  test.eq("main", branch(shared), "the main checkout is left alone")
+  local shown = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(in_worktree.diff.scene.window))
+  test.eq(real(other), real(shown):sub(1, #real(other)), "the shown file is the worktree's own")
+  in_worktree.close()
+  vim.wait(1000, function() return in_worktree.workspace.lifecycle.closed() end, 10)
+  credentials.reset()
+
+  -- A worktree without a PR: its branch against the base, uncommitted
+  -- edits included, with nothing checked out anywhere.
+  local scratch = shared.root .. "/scratch"
+  run(shared.work, { "worktree", "add", "-q", "-b", "spike/local", scratch, "main" })
+  vim.fn.writefile({ "fixture", "an uncommitted line" }, scratch .. "/README.md")
+  local listed = nil
+  git.worktrees(shared.work, function(ok, worktrees) listed = ok and worktrees or {} end)
+  test.truthy(vim.wait(5000, function() return listed ~= nil end, 10), "worktrees are listed")
+  test.eq(3, #listed, "the main checkout and two worktrees")
+  test.truthy(listed[1].current, "the main checkout is the current one")
+  local picked = nil
+  for _, worktree in ipairs(listed) do
+    if worktree.branch == "spike/local" then
+      picked = worktree
+    end
+  end
+  test.truthy(picked, "the new worktree is listed with its branch")
+  session.configure({ cwd = shared.work })
+  session.current = nil
+  session.open_worktree(picked)
+  test.truthy(vim.wait(5000, function() return session.current ~= nil end, 10), "the worktree page opens")
+  local spike = session.current.state
+  test.truthy(vim.wait(15000, function() return ready(spike) end, 20), "the worktree's diff opens")
+  test.eq("ready", spike.diff.status, "the worktree compares cleanly: " .. tostring(spike.error))
+  test.eq("spike/local", spike.head, "the head is the worktree's branch")
+  test.eq(1, #spike.diff.files, "the uncommitted edit is the only change")
+  test.eq("README.md", spike.diff.files[1].path, "the edited file is shown")
+  test.eq("main", branch(shared), "nothing was checked out in the main repository")
+  spike.close()
+  vim.wait(1000, function() return spike.workspace.lifecycle.closed() end, 10)
+  fixture_repo.remove(shared)
   vim.o.columns = columns
 end

@@ -306,6 +306,67 @@ function M.open_compare(base, head)
   M.current = { feature = "branch_compare", state = state, buffer = buffer }
 end
 
+-- A worktree on the compare page: its branch (or detached HEAD) against
+-- the base branch, read from the worktree itself, so uncommitted edits
+-- are part of the diff and nothing is checked out. `worktree` is
+-- { path, branch, head }; base defaults to the remote's default branch.
+function M.open_worktree(worktree, base)
+  local function open(base_branch, base_rev)
+    local feature = loader.load("branch_compare")
+    local state = feature.create({
+      base = base_branch,
+      base_rev = base_rev,
+      head = worktree.branch or (worktree.head or "HEAD"):sub(1, 7),
+      cwd = worktree.path,
+      worktree = worktree.path,
+    })
+    local buffer = feature.open(state)
+    M.current = { feature = "branch_compare", state = state, buffer = buffer }
+  end
+  if base then
+    return open(base, base)
+  end
+  -- The remote's default branch as the remote has it; without origin/HEAD,
+  -- the local main.
+  require("proud.git").default_branch(worktree.path, function(branch, known)
+    open(branch, known and "origin/" .. branch or branch)
+  end)
+end
+
+-- The worktree matching `query` (a branch name or a path), or a picker of
+-- all of them when query is empty. Errors are reported, not thrown.
+function M.choose_worktree(query, callback)
+  local git = require("proud.git")
+  git.worktrees(repository(), function(ok, worktrees)
+    if not ok then
+      return fail(worktrees)
+    end
+    worktrees = vim.tbl_filter(function(worktree)
+      return not worktree.bare
+    end, worktrees)
+    if query and query ~= "" then
+      local wanted = vim.fn.fnamemodify(query, ":p"):gsub("/$", "")
+      for _, worktree in ipairs(worktrees) do
+        if worktree.branch == query or worktree.path == wanted or vim.fn.fnamemodify(worktree.path, ":t") == query then
+          return callback(worktree)
+        end
+      end
+      return fail("No worktree for " .. query)
+    end
+    vim.ui.select(worktrees, {
+      prompt = "Worktree",
+      format_item = function(worktree)
+        local name = worktree.branch or ("detached " .. (worktree.head or ""):sub(1, 7))
+        return name .. "  " .. vim.fn.fnamemodify(worktree.path, ":~") .. (worktree.current and "  (current)" or "")
+      end,
+    }, function(choice)
+      if choice then
+        callback(choice)
+      end
+    end)
+  end)
+end
+
 function M.open_help()
   local feature = loader.load("keymap_help")
   local state = feature.create()
